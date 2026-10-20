@@ -101,3 +101,19 @@ drop policy if exists "insert own account deletion request" on public.account_de
 drop policy if exists "read own account deletion request" on public.account_deletion_requests;
 create policy "insert own account deletion request" on public.account_deletion_requests for insert to authenticated with check (auth.uid() = user_id and email = (auth.jwt() ->> 'email'));
 create policy "read own account deletion request" on public.account_deletion_requests for select to authenticated using (auth.uid() = user_id);
+
+
+-- Compteur public des visites de la page de connexion.
+-- N'enregistre aucune identité, adresse e-mail ni adresse IP.
+create table if not exists public.public_page_visits (
+  id bigint generated always as identity primary key,
+  visited_at timestamptz not null default now()
+);
+create index if not exists public_page_visits_visited_at_idx on public.public_page_visits(visited_at desc);
+alter table public.public_page_visits enable row level security;
+grant select, insert on public.public_page_visits to anon, authenticated;
+grant usage, select on sequence public.public_page_visits_id_seq to anon, authenticated;
+drop policy if exists "public can record anonymous page visits" on public.public_page_visits;
+drop policy if exists "public can read anonymous page visits" on public.public_page_visits;
+create policy "public can record anonymous page visits" on public.public_page_visits for insert to anon, authenticated with check (true);
+create policy "public can read anonymous page visits" on public.public_page_visits for select to anon, authenticated using (true);

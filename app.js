@@ -30,6 +30,7 @@
   function authUI() {
     const logged = !!state.user;
     $('auth')?.classList.toggle('hide', logged);
+    $('authVisits')?.classList.toggle('hide', logged);
     $('app')?.classList.toggle('hide', !logged);
     $('logout')?.classList.toggle('hide', !logged);
     if (!logged) return;
@@ -72,11 +73,11 @@
   function syncRouteFromUrl() {
     const route = parseRoute();
     if (!state.user) {
-      $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
+      $('auth')?.classList.remove('hide'); $('authVisits')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
       if (route.page === 'auth') { if (route.authMode === 'signup') toggleSignupFields(true); else toggleSignupFields(false); }
       return;
     }
-    $('auth')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
+    $('auth')?.classList.add('hide'); $('authVisits')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
     if (route.page === 'auth') { history.replaceState({}, '', '/accueil'); return showPage('home', false); }
     if (route.game) {
       state.activeGame = route.game;
@@ -309,8 +310,53 @@
     $('copyId').addEventListener('click', async () => { const id=state.user?.id; if(!id) return; try { await navigator.clipboard.writeText(id); $('copyId').textContent='Copié ✓'; setTimeout(()=>$('copyId').textContent='Copier',1600); } catch { msg('profilemsg','Impossible de copier automatiquement. Sélectionnez l’identifiant pour le copier.'); } });
   }
   function initDate() { say('todayDate', new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})); const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); const local=now.toISOString().slice(0,16); if($('observedAt')) $('observedAt').value=local; }
+
+  async function trackPublicVisit() {
+    const list = $('recentVisits');
+    const notice = $('visitNotice');
+    if (!db) { if (list) list.textContent = 'Le compteur est indisponible pour le moment.'; return; }
+    try {
+      // One count per browser tab/session, without collecting names, email addresses or IPs.
+      let shouldRecord = true;
+      try { shouldRecord = sessionStorage.getItem('stratx_visit_recorded') !== 'yes'; } catch (_) {}
+      if (shouldRecord) {
+        const { error: insertError } = await db.from('public_page_visits').insert({});
+        if (insertError) throw insertError;
+        try { sessionStorage.setItem('stratx_visit_recorded', 'yes'); } catch (_) {}
+      }
+      const [{ count, error: countError }, { data, error: recentError }] = await Promise.all([
+        db.from('public_page_visits').select('id', { count: 'exact', head: true }),
+        db.from('public_page_visits').select('visited_at').order('visited_at', { ascending: false }).limit(5)
+      ]);
+      if (countError) throw countError;
+      if (recentError) throw recentError;
+      say('visitCount', Number(count || 0).toLocaleString('fr-FR'));
+      if (list) {
+        list.replaceChildren();
+        if (!data?.length) {
+          const empty = document.createElement('p'); empty.className = 'visit-status'; empty.textContent = 'Aucune visite enregistrée pour le moment.'; list.append(empty);
+        } else {
+          data.forEach((visit, index) => {
+            const row = document.createElement('div'); row.className = 'recent-visit-row';
+            const dot = document.createElement('span'); dot.className = 'recent-visit-dot'; dot.setAttribute('aria-hidden', 'true');
+            const label = document.createElement('span'); label.className = 'recent-visit-label'; label.textContent = index === 0 ? 'Visite la plus récente' : `Visite récente ${index + 1}`;
+            const date = document.createElement('time'); date.className = 'recent-visit-date'; date.dateTime = visit.visited_at; date.textContent = formatDate(visit.visited_at);
+            row.append(dot, label, date); list.append(row);
+          });
+        }
+      }
+      if (notice) notice.textContent = 'Une visite est comptée une fois par session de navigateur. Les lignes récentes sont anonymes et indiquent uniquement la date et l’heure.';
+    } catch (error) {
+      say('visitCount', '—');
+      if (list) { list.replaceChildren(); const row = document.createElement('p'); row.className = 'visit-status'; row.textContent = 'Compteur non activé. Exécutez le bloc SQL fourni dans schema.sql, puis rechargez la page.'; list.append(row); }
+      if (notice) notice.textContent = 'Aucune donnée de visite n’a pu être chargée. Vérifiez la configuration et les règles Supabase.';
+      console.warn('StratX visit counter:', error?.message || error);
+    }
+  }
+
   async function init() {
     bind(); initDate();
+    trackPublicVisit();
     window.addEventListener('popstate', syncRouteFromUrl);
     if (!db) { setStatus('Supabase indisponible',false); msg('authmsg','Impossible de charger Supabase. Vérifiez la connexion Internet ou la configuration de la bibliothèque.',true); return; }
     try {
