@@ -1,20 +1,32 @@
-STRATX WEB APP — VERSION ACCUEIL
-==================================
+STRATX — VERSION MVP CONNECTÉE À SUPABASE
+========================================
 
-Fichiers :
-- index.html : écran d'authentification et accueil après connexion
-- style.css  : thème responsive noir et or
-- app.js     : connexion/inscription Supabase, navigation, profil et analyses
-- schema.sql : table analyses et règles RLS
+Fonctions incluses
+- Inscription / connexion par e-mail avec Supabase Auth.
+- Accueil avec dernières publications et compteurs.
+- Analyses sportives : compétition, équipes, observations et statistiques.
+- Aviator, JetX, CosmoX : historique personnel de résultats déjà observés et calcul descriptif de moyenne / maximum.
+- Communauté : publication et lecture des analyses.
+- Profil et déconnexion.
+- Sécurité de base via Row Level Security (RLS).
 
-Mise en route :
-1. Dans Supabase Dashboard > SQL Editor, exécutez schema.sql.
-2. Dans Authentication > Providers, vérifiez que Email est activé.
-3. Déployez les fichiers sur un hébergement HTTPS ou utilisez un serveur local.
-4. Créez un compte ou connectez-vous. Après authentification, l'accueil s'affiche.
-5. Publiez une analyse et vérifiez la table public.analyses.
+MISE EN SERVICE
+1. Ouvrez votre projet Supabase.
+2. Allez dans SQL Editor, créez une nouvelle requête, collez schema.sql et exécutez-la.
+3. Vérifiez Authentication > Providers > Email.
+4. Téléversez index.html, style.css et app.js sur un hébergeur HTTPS statique (par ex. Netlify, Cloudflare Pages ou GitHub Pages).
+5. Testez la création de compte, confirmez l'e-mail si demandé, connectez-vous puis ajoutez une publication et une observation.
+6. Dans Supabase, consultez Table Editor pour vérifier que les lignes sont enregistrées.
 
-Le projet URL et la publishable key fournis sont intégrés dans app.js.
-Ne placez jamais une service_role/secret key dans le code navigateur.
-Ce paquet n'a pas été déployé ni testé contre votre projet Supabase. Il nécessite Internet.
-Les analyses ne garantissent aucun résultat.
+CONFIGURATION
+Le projet utilise le Project URL et la publishable key fournis pour cette application. Une clé publishable peut être utilisée côté navigateur avec RLS activé. Ne mettez jamais une service_role key ou un mot de passe administrateur dans le code client.
+
+LIMITES HONNÊTES
+C'est un MVP fonctionnel côté code, mais il n'a pas été déployé ni testé en direct sur votre compte Supabase. L'application nécessite Internet, les tables créées par schema.sql et un hébergement HTTPS. Les résultats passés des jeux à hasard ne prédisent pas les résultats futurs. Aucun système de gain, signal garanti, automatisation de mise ou promesse de profit n'est inclus.
+
+À AJOUTER PLUS TARD
+- Profils publics / pseudonymes.
+- Modération et signalement.
+- Filtrage et recherche.
+- Statistiques plus avancées.
+- Interface administrateur sécurisée côté serveur.
