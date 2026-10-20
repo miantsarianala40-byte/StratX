@@ -1,0 +1,85 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080a0d">
+  <title>StratX — Analyse & Performance</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#">Strat<span>X</span></a>
+    <span id="connection" class="status">Connexion...</span>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <p class="eyebrow">SPORTS INTELLIGENCE</p>
+      <h1>Analyse.<br><span>Stratégie. Performance.</span></h1>
+      <p>Statistiques sportives, analyses et communauté.</p>
+    </section>
+
+    <section class="panel" id="authPanel">
+      <h2>Votre compte</h2>
+      <form id="authForm">
+        <label for="email">Adresse e-mail</label>
+        <input id="email" type="email" required
+          autocomplete="email" placeholder="vous@exemple.com">
+
+        <label for="password">Mot de passe</label>
+        <input id="password" type="password" required
+          minlength="6" autocomplete="current-password"
+          placeholder="6 caractères minimum">
+
+        <div class="actions">
+          <button type="submit" id="loginBtn">Connexion</button>
+          <button type="button" class="secondary" id="signupBtn">
+            Créer un compte
+          </button>
+        </div>
+      </form>
+      <button id="logoutBtn" class="secondary hidden" type="button">
+        Déconnexion
+      </button>
+      <p id="authMessage" class="message" role="status"></p>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">COMMUNAUTÉ</p>
+          <h2>Analyses récentes</h2>
+        </div>
+        <button id="refreshBtn" class="secondary">Actualiser</button>
+      </div>
+
+      <form id="postForm">
+        <label for="postTitle">Titre de l'analyse</label>
+        <input id="postTitle" maxlength="120" required
+          placeholder="Ex. Analyse d'un match">
+
+        <label for="postBody">Votre analyse</label>
+        <textarea id="postBody" maxlength="3000" rows="4" required
+          placeholder="Partagez vos observations et statistiques..."></textarea>
+
+        <button id="publishBtn" type="submit">
+          Publier l'analyse
+        </button>
+        <p id="postMessage" class="message" role="status"></p>
+      </form>
+
+      <div id="posts" class="posts">
+        <p class="muted">Chargement des publications...</p>
+      </div>
+    </section>
+
+    <footer>
+      StratX · Analyse & Performance
+    </footer>
+  </main>
+</body>
+</html>
