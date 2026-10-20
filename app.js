@@ -50,7 +50,7 @@
     if ($('displayName') && !$('displayName').dataset.loaded) { $('displayName').value = meta.display_name || ''; $('profileBio').value = meta.bio || ''; $('displayName').dataset.loaded = 'yes'; }
   }
   const gameSlug = { aviator: 'Aviator', jetx: 'JetX', cosmox: 'CosmoX' };
-  const gameRouteSections = new Set(['resultats', 'historique', 'statistiques', 'ajouter']);
+  const gameRouteSections = new Set(['resultats', 'historique', 'statistiques']);
   function parseRoute() {
     const path = decodeURIComponent(window.location.pathname).replace(/\/+$/, '') || '/';
     const parts = path.split('/').filter(Boolean);
@@ -175,7 +175,7 @@
   }
   function renderGame() {
     const name = state.activeGame; const info = gameInfo[name]; if (!info) return;
-    say('gamename', name); $('gamename').value = name;
+    say('gamename', name); if ($('gamename')) $('gamename').value = name;
     say('gameBannerTitle', name); say('gameBannerDesc', info.desc); say('historyTitle', `Historique ${name}`);
     const logo = $('gameBannerLogo'); logo.className = `game-banner-logo ${info.cls}`; logo.textContent = info.logo;
     document.querySelectorAll('.game-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.game === name));
@@ -189,10 +189,9 @@
     const historyButton = $('toggleGameHistory'); if (historyButton) historyButton.textContent = state.showGameHistory ? 'Masquer l’historique précédent' : 'Afficher l’historique précédent';
     const section = gameRouteSections.has(state.gameSection) ? state.gameSection : 'overview';
     const statsPanel = document.querySelector('#games .game-stats');
-    const addPanel = $('gameform')?.closest('.surface');
     const resultsPanel = $('analysisResult')?.closest('.analysis-result-panel');
     const historyPanel = $('historyTitle')?.closest('.surface');
-    const panels = { statistiques: statsPanel, ajouter: addPanel, resultats: resultsPanel, historique: historyPanel };
+    const panels = { statistiques: statsPanel, resultats: resultsPanel, historique: historyPanel };
     Object.entries(panels).forEach(([key, panel]) => { if (panel) panel.classList.toggle('hide', section !== 'overview' && section !== key); });
     document.querySelectorAll('[data-game-section]').forEach(btn => {
       const active = btn.dataset.gameSection === section;
@@ -283,12 +282,6 @@
       try { const { error } = await db.from('sports_analyses').insert({ user_id: state.user.id, competition: $('competition').value.trim(), teams: $('teams').value.trim(), notes: $('notes').value.trim(), match_date: date }); if(error) throw error; e.target.reset(); msg('sportmsg','Fiche de rencontre enregistrée.'); await refresh(); }
       catch(error) { msg('sportmsg',friendlyError(error),true); } finally { if(btn) btn.disabled=false; }
     });
-    $('gameform').addEventListener('submit', async e => {
-      e.preventDefault(); if (!state.user) return;
-      const raw=$('multiplier').value; const observed = $('observedAt').value ? new Date($('observedAt').value).toISOString() : new Date().toISOString(); const btn=e.submitter; if(btn) btn.disabled=true;
-      try { const { error } = await db.from('game_observations').insert({ user_id: state.user.id, game_name: state.activeGame, multiplier: raw === '' ? null : Number(raw), note: null, observed_at: observed }); if(error) throw error; e.target.reset(); $('gamename').value=state.activeGame; msg('gamemsg',`Observation ${state.activeGame} enregistrée.`); await refresh(); }
-      catch(error) { msg('gamemsg',friendlyError(error),true); } finally { if(btn) btn.disabled=false; }
-    });
     $('postform').addEventListener('submit', async e => {
       e.preventDefault(); if (!state.user) { msg('postmsg','Connectez-vous pour publier.',true); return; } const btn=e.submitter; if(btn) btn.disabled=true;
       const title=$('title').value.trim(), body=$('body').value.trim(); if(!title || !body){msg('postmsg','Le titre et le message sont obligatoires.',true);if(btn)btn.disabled=false;return;}
@@ -312,11 +305,14 @@
   function initDate() { say('todayDate', new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})); const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); const local=now.toISOString().slice(0,16); if($('observedAt')) $('observedAt').value=local; }
 
   async function trackPublicVisit() {
-    const list = $('recentVisits');
+    const tableBody = $('recentVisits');
     const notice = $('visitNotice');
-    if (!db) { if (list) list.textContent = 'Le compteur est indisponible pour le moment.'; return; }
+    if (!db) {
+      if (tableBody) tableBody.innerHTML = '<tr><td colspan="3" class="visit-status">Tsy afaka mifandray amin’ny compteur amin’izao fotoana izao.</td></tr>';
+      return;
+    }
     try {
-      // One count per browser tab/session, without collecting names, email addresses or IPs.
+      // Compte once per browser session. Public visits are deliberately anonymous.
       let shouldRecord = true;
       try { shouldRecord = sessionStorage.getItem('stratx_visit_recorded') !== 'yes'; } catch (_) {}
       if (shouldRecord) {
@@ -326,30 +322,36 @@
       }
       const [{ count, error: countError }, { data, error: recentError }] = await Promise.all([
         db.from('public_page_visits').select('id', { count: 'exact', head: true }),
-        db.from('public_page_visits').select('visited_at').order('visited_at', { ascending: false }).limit(5)
+        db.from('public_page_visits').select('visited_at').order('visited_at', { ascending: false }).limit(8)
       ]);
       if (countError) throw countError;
       if (recentError) throw recentError;
       say('visitCount', Number(count || 0).toLocaleString('fr-FR'));
-      if (list) {
-        list.replaceChildren();
+      if (tableBody) {
+        tableBody.replaceChildren();
         if (!data?.length) {
-          const empty = document.createElement('p'); empty.className = 'visit-status'; empty.textContent = 'Aucune visite enregistrée pour le moment.'; list.append(empty);
+          const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 3; td.className = 'visit-status'; td.textContent = 'Mbola tsy misy fitsidihana voatahiry.'; tr.append(td); tableBody.append(tr);
         } else {
           data.forEach((visit, index) => {
-            const row = document.createElement('div'); row.className = 'recent-visit-row';
-            const dot = document.createElement('span'); dot.className = 'recent-visit-dot'; dot.setAttribute('aria-hidden', 'true');
-            const label = document.createElement('span'); label.className = 'recent-visit-label'; label.textContent = index === 0 ? 'Visite la plus récente' : `Visite récente ${index + 1}`;
-            const date = document.createElement('time'); date.className = 'recent-visit-date'; date.dateTime = visit.visited_at; date.textContent = formatDate(visit.visited_at);
-            row.append(dot, label, date); list.append(row);
+            const tr = document.createElement('tr');
+            const visitorCell = document.createElement('td');
+            const visitor = document.createElement('div'); visitor.className = 'visit-person';
+            const avatar = document.createElement('span'); avatar.className = 'visit-avatar'; avatar.textContent = 'V';
+            const details = document.createElement('span'); details.className = 'visit-person-copy';
+            const name = document.createElement('b'); name.textContent = `Visiteur anonyme ${index + 1}`;
+            const sub = document.createElement('small'); sub.textContent = 'Session navigateur';
+            details.append(name, sub); visitor.append(avatar, details); visitorCell.append(visitor);
+            const dateCell = document.createElement('td'); const date = document.createElement('time'); date.className = 'recent-visit-date'; date.dateTime = visit.visited_at; date.textContent = formatDate(visit.visited_at); dateCell.append(date);
+            const statusCell = document.createElement('td'); const status = document.createElement('span'); status.className = 'visit-status-pill'; status.innerHTML = '<i></i> Enregistrée'; statusCell.append(status);
+            tr.append(visitorCell, dateCell, statusCell); tableBody.append(tr);
           });
         }
       }
-      if (notice) notice.textContent = 'Une visite est comptée une fois par session de navigateur. Les lignes récentes sont anonymes et indiquent uniquement la date et l’heure.';
+      if (notice) notice.textContent = 'Chaque ligne représente une visite enregistrée ; une session navigateur ne compte qu’une fois. Les identités réelles ne sont pas collectées.';
     } catch (error) {
       say('visitCount', '—');
-      if (list) { list.replaceChildren(); const row = document.createElement('p'); row.className = 'visit-status'; row.textContent = 'Compteur non activé. Exécutez le bloc SQL fourni dans schema.sql, puis rechargez la page.'; list.append(row); }
-      if (notice) notice.textContent = 'Aucune donnée de visite n’a pu être chargée. Vérifiez la configuration et les règles Supabase.';
+      if (tableBody) { tableBody.replaceChildren(); const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 3; td.className = 'visit-status'; td.textContent = 'Compteur non activé. Exécutez le bloc SQL de schema.sql dans Supabase, puis rechargez la page.'; tr.append(td); tableBody.append(tr); }
+      if (notice) notice.textContent = 'Vérifiez la configuration Supabase et les règles de la table public_page_visits.';
       console.warn('StratX visit counter:', error?.message || error);
     }
   }
