@@ -21,3 +21,8 @@
 .profile-bio-card p{margin:9px 0 0;color:#c4cbd4;white-space:pre-wrap;overflow-wrap:anywhere}
 button:disabled{cursor:not-allowed!important;opacity:.48;filter:saturate(.5)}
 @media(max-width:620px){.profile-metrics{gap:9px}.analysis-result{padding:15px}}
+
+/* Premium date/time control for game observation entries */
+.surface input.premium-datetime{color-scheme:dark;min-height:48px;border-color:#65502d;background:linear-gradient(135deg,#11151b,#0a0d12);font-variant-numeric:tabular-nums;letter-spacing:.35px;box-shadow:inset 0 1px 0 #ffffff05}
+.surface input.premium-datetime:focus{border-color:#e7bd61;box-shadow:0 0 0 3px #e7bd611c,0 0 22px #c9973610}
+.datetime-hint{display:block;margin-top:7px;color:#a99975;font-size:10px;letter-spacing:.45px}

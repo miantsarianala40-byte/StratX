@@ -220,7 +220,7 @@
     });
     $('togglePassword').addEventListener('click', () => { const p=$('password'); p.type = p.type === 'password' ? 'text' : 'password'; });
     $('logout').addEventListener('click', signOut); $('profileLogout').addEventListener('click', signOut); $('refresh').addEventListener('click', refresh);
-    $('sportform').addEventListener('submit', async e => {
+    $('sportform')?.addEventListener('submit', async e => {
       e.preventDefault(); if (!state.user) return;
       const btn=e.submitter; if(btn) btn.disabled=true;
       const date = $('matchdate').value ? new Date($('matchdate').value).toISOString() : null;
