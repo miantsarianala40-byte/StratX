@@ -4,7 +4,7 @@
   const SUPABASE_KEY = 'sb_publishable_IFZGXyCPkt_eZFjaDdWOaA_LYZ1UdEg';
   const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
   const $ = id => document.getElementById(id);
-  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
+  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', gameSection: 'overview', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
   const gameInfo = {
     Aviator: { desc: 'Consignez les observations passées du jeu Aviator et consultez un résumé descriptif.', logo: '✈', cls: 'aviator-logo' },
     JetX: { desc: 'Un espace dédié pour garder un historique personnel des observations JetX.', logo: 'JX', cls: 'jetx-logo' },
@@ -48,27 +48,44 @@
     say('profileBioPreview', meta.bio || 'Ajoutez une présentation pour compléter votre profil.');
     if ($('displayName') && !$('displayName').dataset.loaded) { $('displayName').value = meta.display_name || ''; $('profileBio').value = meta.bio || ''; $('displayName').dataset.loaded = 'yes'; }
   }
-  const routeToPage = {
-    '/': { page: 'home' }, '/accueil': { page: 'home' }, '/connexion': { page: 'auth' },
-    '/jeux': { page: 'games' }, '/aviator': { page: 'games', game: 'Aviator' },
-    '/jetx': { page: 'games', game: 'JetX' }, '/cosmox': { page: 'games', game: 'CosmoX' },
-    '/communaute': { page: 'community' }, '/profil': { page: 'profile' }
-  };
-  const pageToRoute = { home: '/accueil', auth: '/connexion', games: '/jeux', community: '/communaute', profile: '/profil' };
+  const gameSlug = { aviator: 'Aviator', jetx: 'JetX', cosmox: 'CosmoX' };
+  const gameRouteSections = new Set(['resultats', 'historique', 'statistiques', 'ajouter']);
+  function parseRoute() {
+    const path = decodeURIComponent(window.location.pathname).replace(/\/+$/, '') || '/';
+    const parts = path.split('/').filter(Boolean);
+    const first = (parts[0] || '').toLowerCase();
+    if (gameSlug[first]) {
+      const section = (parts[1] || 'overview').toLowerCase();
+      return { page: 'games', game: gameSlug[first], section: gameRouteSections.has(section) ? section : 'overview', path };
+    }
+    const fixed = {
+      '/': { page: 'home' }, '/accueil': { page: 'home' }, '/connexion': { page: 'auth' },
+      '/inscription': { page: 'auth', authMode: 'signup' }, '/mot-de-passe-oublie': { page: 'auth', authMode: 'reset' },
+      '/jeux': { page: 'games' }, '/communaute': { page: 'community' }, '/profil': { page: 'profile' }
+    };
+    return { ...(fixed[path] || fixed['/']), path };
+  }
+  function routeForCurrentPage(id) {
+    if (id === 'games') return `/${state.activeGame.toLowerCase()}${state.gameSection && state.gameSection !== 'overview' ? '/' + state.gameSection : ''}`;
+    return ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil' })[id] || '/accueil';
+  }
   function syncRouteFromUrl() {
-    const path = window.location.pathname.replace(/\/+$/, '') || '/';
-    const route = routeToPage[path] || routeToPage['/'];
+    const route = parseRoute();
     if (!state.user) {
       $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
+      if (route.page === 'auth') { if (route.authMode === 'signup') toggleSignupFields(true); else toggleSignupFields(false); }
       return;
     }
     $('auth')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
     if (route.page === 'auth') { history.replaceState({}, '', '/accueil'); return showPage('home', false); }
     if (route.game) {
       state.activeGame = route.game;
+      state.gameSection = route.section || 'overview';
+      state.showGameHistory = state.gameSection === 'historique';
       document.querySelectorAll('.game-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.game === route.game));
     }
     showPage(route.page, false);
+    if (route.page === 'auth' && route.authMode === 'reset') toggleSignupFields(false);
   }
   function showPage(id, updateUrl = true) {
     if (id === 'sports') { setStatus('Module football verrouillé temporairement', false); return; }
@@ -78,7 +95,7 @@
     document.querySelectorAll('[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page === id));
     if (id === 'games') renderGame();
     if (id === 'profile') authUI();
-    if (updateUrl) history.pushState({}, '', pageToRoute[id] || '/accueil');
+    if (updateUrl) history.pushState({}, '', routeForCurrentPage(id));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   function createRecord(title, body, date, eyebrow) {
@@ -226,8 +243,8 @@
   function bind() {
     document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
     document.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.goto)));
-    document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.showGameHistory = false; document.querySelectorAll('.game-tab').forEach(tab => tab.classList.toggle('active', tab === btn)); history.pushState({}, '', '/' + btn.dataset.game.toLowerCase()); renderGame(); }));
-    $('toggleGameHistory')?.addEventListener('click', () => { state.showGameHistory = !state.showGameHistory; renderGame(); });
+    document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.gameSection = 'overview'; state.showGameHistory = false; document.querySelectorAll('.game-tab').forEach(tab => tab.classList.toggle('active', tab === btn)); history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
+    $('toggleGameHistory')?.addEventListener('click', () => { state.showGameHistory = !state.showGameHistory; state.gameSection = state.showGameHistory ? 'historique' : 'overview'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); });
     $('login').addEventListener('click', () => { history.pushState({}, '', '/connexion'); toggleSignupFields(false); runAuth('login'); });
     $('signup').addEventListener('click', () => {
       if (!$('signupNameWrap')?.classList.contains('signup-mode')) {
@@ -280,7 +297,6 @@
   function initDate() { say('todayDate', new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})); const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); const local=now.toISOString().slice(0,16); if($('observedAt')) $('observedAt').value=local; }
   async function init() {
     bind(); initDate();
-    window.addEventListener('popstate', syncRouteFromUrl);
     window.addEventListener('popstate', syncRouteFromUrl);
     if (!db) { setStatus('Supabase indisponible',false); msg('authmsg','Impossible de charger Supabase. Vérifiez la connexion Internet ou la configuration de la bibliothèque.',true); return; }
     try {
