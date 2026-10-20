@@ -186,6 +186,19 @@
     if (result) { result.replaceChildren(); if (latest) { const label=document.createElement('div'); label.className='eyebrow'; label.textContent='DERNIÈRE OBSERVATION ENREGISTRÉE'; const value=document.createElement('h3'); value.className='analysis-result-value'; value.textContent=latest.multiplier == null ? 'Observation enregistrée' : `${Number(latest.multiplier).toFixed(2)}x`; const date=document.createElement('p'); date.className='subtle'; date.textContent=formatDate(latest.observed_at || latest.created_at); result.append(label,value,date); } else { const label=document.createElement('div'); label.className='eyebrow'; label.textContent='RÉSULTAT'; const value=document.createElement('h3'); value.textContent='Aucune observation enregistrée'; const date=document.createElement('p'); date.className='subtle'; date.textContent='Enregistrez une valeur observée pour l’afficher ici.'; result.append(label,value,date); } }
     const history = $('historyPanel'); if (history) history.classList.toggle('hide', !state.showGameHistory);
     const historyButton = $('toggleGameHistory'); if (historyButton) historyButton.textContent = state.showGameHistory ? 'Masquer l’historique précédent' : 'Afficher l’historique précédent';
+    const section = gameRouteSections.has(state.gameSection) ? state.gameSection : 'overview';
+    const statsPanel = document.querySelector('#games .game-stats');
+    const addPanel = $('gameform')?.closest('.surface');
+    const resultsPanel = $('analysisResult')?.closest('.analysis-result-panel');
+    const historyPanel = $('historyTitle')?.closest('.surface');
+    const panels = { statistiques: statsPanel, ajouter: addPanel, resultats: resultsPanel, historique: historyPanel };
+    Object.entries(panels).forEach(([key, panel]) => { if (panel) panel.classList.toggle('hide', section !== 'overview' && section !== key); });
+    document.querySelectorAll('[data-game-section]').forEach(btn => {
+      const active = btn.dataset.gameSection === section;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-current', active ? 'page' : 'false');
+    });
+    if (section === 'historique') { state.showGameHistory = true; if (history) history.classList.remove('hide'); }
     renderList('gameslist', rows, r => ({ title: r.multiplier == null ? 'Observation sans valeur numérique' : `Valeur observée : ${Number(r.multiplier).toFixed(2)}x`, body: '', date: r.observed_at || r.created_at, eyebrow: name.toUpperCase() }), `Aucune observation ${name}`, `Les entrées que vous ajouterez à ${name} seront affichées ici.`);
   }
   function toggleSignupFields(show) {
@@ -244,6 +257,7 @@
     document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
     document.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.goto)));
     document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.gameSection = 'overview'; state.showGameHistory = false; document.querySelectorAll('.game-tab').forEach(tab => tab.classList.toggle('active', tab === btn)); history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
+    document.querySelectorAll('[data-game-section]').forEach(btn => btn.addEventListener('click', () => { const next = btn.dataset.gameSection; if (!['overview', ...gameRouteSections].includes(next)) return; state.gameSection = next; state.showGameHistory = next === 'historique'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
     $('toggleGameHistory')?.addEventListener('click', () => { state.showGameHistory = !state.showGameHistory; state.gameSection = state.showGameHistory ? 'historique' : 'overview'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); });
     $('login').addEventListener('click', () => { history.pushState({}, '', '/connexion'); toggleSignupFields(false); runAuth('login'); });
     $('signup').addEventListener('click', () => {
