@@ -53,8 +53,16 @@
   const gameSlug = { aviator: 'Aviator', jetx: 'JetX', cosmox: 'CosmoX' };
   const gameRouteSections = new Set(['resultats', 'historique', 'statistiques']);
   function parseRoute() {
-    const path = decodeURIComponent(window.location.pathname).replace(/\/+$/, '') || '/';
+    // Canonicalise malformed paths such as /aviator/resultats/"?" to a known route.
+    let path = window.location.pathname;
+    try { path = decodeURIComponent(path); } catch (_) {}
+    path = path.replace(/[\"'<>]/g, '').replace(/\/+$/, '') || '/';
     const parts = path.split('/').filter(Boolean);
+    if (parts.length >= 2 && gameSlug[(parts[0] || '').toLowerCase()] && gameRouteSections.has((parts[1] || '').toLowerCase())) {
+      const canonical = `/${(parts[0] || '').toLowerCase()}/${(parts[1] || '').toLowerCase()}`;
+      if (window.location.pathname !== canonical) history.replaceState({}, '', canonical);
+      path = canonical;
+    }
     const first = (parts[0] || '').toLowerCase();
     if (gameSlug[first]) {
       const section = (parts[1] || 'overview').toLowerCase();
@@ -75,13 +83,20 @@
     const route = parseRoute();
     if (!state.user) {
       $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
-      $('auth')?.classList.remove('hide');
+      const visitorsOnly = route.page === 'visitors';
+      $('auth')?.classList.toggle('hide', visitorsOnly);
       $('authVisits')?.classList.remove('hide');
+      $('authVisits')?.classList.toggle('visitors-standalone', visitorsOnly);
       if (route.page === 'auth') { if (route.authMode === 'signup') toggleSignupFields(true); else toggleSignupFields(false); }
-      if (route.page === 'visitors') trackPublicVisit();
+      if (visitorsOnly) trackPublicVisit();
       return;
     }
-    $('auth')?.classList.add('hide'); $('authVisits')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
+    if (route.page === 'visitors') {
+      $('auth')?.classList.add('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
+      $('authVisits')?.classList.remove('hide'); $('authVisits')?.classList.add('visitors-standalone');
+      trackPublicVisit(); return;
+    }
+    $('auth')?.classList.add('hide'); $('authVisits')?.classList.add('hide'); $('authVisits')?.classList.remove('visitors-standalone'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
     if (route.page === 'auth') { history.replaceState({}, '', '/accueil'); return showPage('home', false); }
     if (route.game) {
       state.activeGame = route.game;
@@ -258,8 +273,8 @@
   }
   async function signOut() { if (!db) return; const { error } = await db.auth.signOut(); if (error) msg('profilemsg', friendlyError(error), true); }
   function bind() {
-    $('openVisitors')?.addEventListener('click', async () => { $('auth')?.classList.remove('hide'); $('authVisits')?.classList.remove('hide'); history.pushState({}, '', '/visiteurs'); await trackPublicVisit(); $('authVisits')?.scrollIntoView({behavior:'smooth',block:'start'}); });
-    $('backToLogin')?.addEventListener('click', () => { $('authVisits')?.classList.remove('hide'); $('auth')?.classList.remove('hide'); history.pushState({}, '', '/connexion'); window.scrollTo({top:0,behavior:'smooth'}); });
+    $('openVisitors')?.addEventListener('click', async () => { $('auth')?.classList.add('hide'); $('authVisits')?.classList.remove('hide'); $('authVisits')?.classList.add('visitors-standalone'); history.pushState({}, '', '/visiteurs'); await trackPublicVisit(); window.scrollTo({top:0,behavior:'smooth'}); });
+    $('backToLogin')?.addEventListener('click', () => { $('authVisits')?.classList.remove('visitors-standalone'); $('authVisits')?.classList.remove('hide'); $('auth')?.classList.remove('hide'); history.pushState({}, '', '/connexion'); window.scrollTo({top:0,behavior:'smooth'}); });
     $('visitPrev')?.addEventListener('click', () => { state.visitorPage=Math.max(0,state.visitorPage-1); renderVisitorPage(); });
     $('visitNext')?.addEventListener('click', () => { const max=Math.max(0,Math.ceil(state.visitorRows.length/25)-1); state.visitorPage=Math.min(max,state.visitorPage+1); renderVisitorPage(); });
     document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
