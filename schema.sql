@@ -58,3 +58,45 @@ create policy "insert own sports" on public.sports_analyses for insert to authen
 -- Game observations remain private to their owner.
 create policy "read own observations" on public.game_observations for select to authenticated using (auth.uid() = user_id);
 create policy "insert own observations" on public.game_observations for insert to authenticated with check (auth.uid() = user_id);
+
+
+-- Communauté: auteur affiché, commentaires partagés et demandes de suppression.
+alter table public.analyses add column if not exists author_name text not null default 'Membre StratX';
+
+create table if not exists public.community_comments (
+  id bigint generated always as identity primary key,
+  post_id bigint not null references public.analyses(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  author_name text not null default 'Membre StratX',
+  body text not null check (char_length(trim(body)) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+create index if not exists community_comments_post_created_idx on public.community_comments(post_id, created_at);
+alter table public.community_comments enable row level security;
+grant select, insert, delete on public.community_comments to authenticated;
+grant usage, select on sequence public.community_comments_id_seq to authenticated;
+drop policy if exists "read community comments" on public.community_comments;
+drop policy if exists "insert own community comments" on public.community_comments;
+drop policy if exists "delete own or post comments" on public.community_comments;
+create policy "read community comments" on public.community_comments for select to authenticated using (true);
+create policy "insert own community comments" on public.community_comments for insert to authenticated with check (auth.uid() = user_id);
+create policy "delete own or post comments" on public.community_comments for delete to authenticated using (auth.uid() = user_id or exists (select 1 from public.analyses a where a.id = post_id and a.user_id = auth.uid()) or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- Post owners can delete their own publications; administrators may moderate all posts.
+grant delete on public.analyses to authenticated;
+drop policy if exists "delete own or admin analyses" on public.analyses;
+create policy "delete own or admin analyses" on public.analyses for delete to authenticated using (auth.uid() = user_id or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+create table if not exists public.account_deletion_requests (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  email text not null,
+  status text not null default 'pending' check (status in ('pending','verified','completed','rejected')),
+  created_at timestamptz not null default now()
+);
+alter table public.account_deletion_requests enable row level security;
+grant insert, select on public.account_deletion_requests to authenticated;
+drop policy if exists "insert own account deletion request" on public.account_deletion_requests;
+drop policy if exists "read own account deletion request" on public.account_deletion_requests;
+create policy "insert own account deletion request" on public.account_deletion_requests for insert to authenticated with check (auth.uid() = user_id and email = (auth.jwt() ->> 'email'));
+create policy "read own account deletion request" on public.account_deletion_requests for select to authenticated using (auth.uid() = user_id);
