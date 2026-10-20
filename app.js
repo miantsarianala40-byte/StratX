@@ -4,7 +4,7 @@
   const SUPABASE_KEY = 'sb_publishable_IFZGXyCPkt_eZFjaDdWOaA_LYZ1UdEg';
   const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
   const $ = id => document.getElementById(id);
-  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {} };
+  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
   const gameInfo = {
     Aviator: { desc: 'Consignez les observations passées du jeu Aviator et consultez un résumé descriptif.', logo: '✈', cls: 'aviator-logo' },
     JetX: { desc: 'Un espace dédié pour garder un historique personnel des observations JetX.', logo: 'JX', cls: 'jetx-logo' },
@@ -33,8 +33,6 @@
     $('app')?.classList.toggle('hide', !logged);
     $('logout')?.classList.toggle('hide', !logged);
     if (!logged) return;
-    // Always land on the home dashboard after a valid session is detected.
-    if ($('app') && $('home') && state.currentPage !== 'home') showPage('home');
     const meta = state.user.user_metadata || {};
     const displayName = meta.display_name || 'Membre StratX';
     say('welcomeName', displayName);
@@ -45,10 +43,13 @@
     say('avatarInitials', initials(displayName));
     say('memberSince', state.user.created_at ? `Membre depuis le ${new Date(state.user.created_at).toLocaleDateString('fr-FR')}` : 'Compte utilisateur');
     say('sessionInfo', state.user.last_sign_in_at ? `Dernière connexion : ${formatDate(state.user.last_sign_in_at)}` : 'Session connectée');
+    say('profilePostCount', String(state.posts.filter(r => r.user_id === state.user.id).length));
+    say('profileObservationCount', String(state.games.filter(r => r.user_id === state.user.id).length));
+    say('profileBioPreview', meta.bio || 'Ajoutez une présentation pour compléter votre profil.');
     if ($('displayName') && !$('displayName').dataset.loaded) { $('displayName').value = meta.display_name || ''; $('profileBio').value = meta.bio || ''; $('displayName').dataset.loaded = 'yes'; }
   }
   function showPage(id) {
-    if(id==='sports'){ id='sports'; }
+    if (id === 'sports') { setStatus('Module football verrouillé temporairement', false); return; }
     if (!$(`${id}`) || !$(`${id}`).classList.contains('page')) return;
     state.currentPage = id;
     document.querySelectorAll('.page').forEach(el => el.classList.toggle('hide', el.id !== id));
@@ -84,12 +85,12 @@
         queryTable('sports_analyses', 'id,competition,teams,notes,match_date,created_at,user_id'),
         queryTable('game_observations', 'id,game_name,multiplier,note,observed_at,created_at,user_id')
       ]);
-      state.posts = posts; state.sports = sports; state.games = games;
+      state.posts = posts; state.sports = sports; state.games = games; authUI();
       say('countPosts', posts.length); say('countSports', sports.length); say('countGames', games.length);
       say('sportsCount', `${sports.length} fiche${sports.length === 1 ? '' : 's'}`);
       renderList('sportslist', sports, r => ({ title: r.teams, body: `${r.competition || 'Compétition non précisée'}\n${r.notes || ''}`, date: r.match_date || r.created_at, eyebrow: 'FICHE FOOTBALL' }), 'Aucune rencontre enregistrée', 'Ajoutez une fiche de rencontre pour la retrouver ici.');
       renderCommunity();
-      renderList('latest', [...posts.map(r => ({ title: r.title, body: r.body, created_at: r.created_at, kind: 'PUBLICATION' })), ...sports.map(r => ({ title: r.teams, body: r.competition, created_at: r.created_at, kind: 'FOOTBALL' })), ...games.map(r => ({ title: `${r.game_name}${r.multiplier == null ? '' : ` · ${Number(r.multiplier).toFixed(2)}x`}`, body: r.note || 'Observation historique', created_at: r.created_at, kind: 'OBSERVATION' }))].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5), r => ({ title: r.title, body: r.body, date: r.created_at, eyebrow: r.kind }), 'Votre espace est prêt', 'Vos publications et analyses apparaîtront ici.');
+      renderList('latest', [...posts.map(r => ({ title: r.title, body: r.body, created_at: r.created_at, kind: 'PUBLICATION' })), ...sports.map(r => ({ title: r.teams, body: r.competition, created_at: r.created_at, kind: 'FOOTBALL' })), ...games.map(r => ({ title: `${r.game_name}${r.multiplier == null ? '' : ` · ${Number(r.multiplier).toFixed(2)}x`}`, body: 'Observation historique enregistrée', created_at: r.created_at, kind: 'OBSERVATION' }))].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5), r => ({ title: r.title, body: r.body, date: r.created_at, eyebrow: r.kind }), 'Votre espace est prêt', 'Vos publications et analyses apparaîtront ici.');
       renderGame(); setStatus('Connecté · synchronisé');
     } catch (error) { setStatus('Erreur de synchronisation', false); console.error('StratX refresh:', error); ['sportslist','posts','latest','gameslist'].forEach(id => { const el=$(id); if(el) el.textContent=friendlyError(error); }); }
   }
@@ -140,7 +141,12 @@
     const rows = state.games.filter(r => r.game_name === name).sort((a,b) => new Date(b.observed_at || b.created_at) - new Date(a.observed_at || a.created_at));
     const vals = rows.map(r => Number(r.multiplier)).filter(v => Number.isFinite(v) && v > 0);
     say('gameTotal', rows.length); say('gameAverage', vals.length ? `${(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2)}x` : '—'); say('gameMaximum', vals.length ? `${Math.max(...vals).toFixed(2)}x` : '—'); say('gameCountChip', `${rows.length} entrée${rows.length===1?'':'s'}`);
-    renderList('gameslist', rows, r => ({ title: r.multiplier == null ? 'Observation sans valeur numérique' : `Valeur observée : ${Number(r.multiplier).toFixed(2)}x`, body: r.note || 'Aucune note ajoutée.', date: r.observed_at || r.created_at, eyebrow: name.toUpperCase() }), `Aucune observation ${name}`, `Les entrées que vous ajouterez à ${name} seront affichées ici.`);
+    const latest = rows[0];
+    const result = $('analysisResult');
+    if (result) { result.replaceChildren(); if (latest) { const label=document.createElement('div'); label.className='eyebrow'; label.textContent='DERNIÈRE OBSERVATION ENREGISTRÉE'; const value=document.createElement('h3'); value.className='analysis-result-value'; value.textContent=latest.multiplier == null ? 'Observation enregistrée' : `${Number(latest.multiplier).toFixed(2)}x`; const date=document.createElement('p'); date.className='subtle'; date.textContent=formatDate(latest.observed_at || latest.created_at); result.append(label,value,date); } else { const label=document.createElement('div'); label.className='eyebrow'; label.textContent='RÉSULTAT'; const value=document.createElement('h3'); value.textContent='Aucune observation enregistrée'; const date=document.createElement('p'); date.className='subtle'; date.textContent='Enregistrez une valeur observée pour l’afficher ici.'; result.append(label,value,date); } }
+    const history = $('historyPanel'); if (history) history.classList.toggle('hide', !state.showGameHistory);
+    const historyButton = $('toggleGameHistory'); if (historyButton) historyButton.textContent = state.showGameHistory ? 'Masquer l’historique précédent' : 'Afficher l’historique précédent';
+    renderList('gameslist', rows, r => ({ title: r.multiplier == null ? 'Observation sans valeur numérique' : `Valeur observée : ${Number(r.multiplier).toFixed(2)}x`, body: '', date: r.observed_at || r.created_at, eyebrow: name.toUpperCase() }), `Aucune observation ${name}`, `Les entrées que vous ajouterez à ${name} seront affichées ici.`);
   }
   function toggleSignupFields(show) {
     const wrap = $('signupNameWrap');
@@ -166,19 +172,10 @@
       if (action === 'login') {
         const { data, error } = await db.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        // Do not rely only on the asynchronous auth-state event to open the dashboard.
-        state.user = data?.user || data?.session?.user || null;
-        if (!state.user) {
-          const { data: sessionData, error: sessionError } = await db.auth.getSession();
-          if (sessionError) throw sessionError;
-          state.user = sessionData?.session?.user || null;
-        }
-        if (!state.user) throw new Error('Connexion acceptée mais session absente. Vérifiez la configuration Auth de Supabase.');
+        state.user = data.user || data.session?.user || null;
         authUI();
-        showPage('home');
-        setStatus('Connecté');
+        if (state.user) { showPage('home'); await refresh(); }
         msg('authmsg', 'Connexion réussie. Bienvenue sur StratX.');
-        refresh().catch(error => console.error('StratX dashboard refresh:', error));
       } else if (action === 'signup') {
         const displayName = $('signupName').value.trim();
         const redirectUrl = window.location.href.split('#')[0];
@@ -189,12 +186,8 @@
         });
         if (error) throw error;
         if (data.session) {
-          state.user = data.user || data.session.user;
-          authUI();
-          showPage('home');
-          setStatus('Connecté');
+          state.user = data.user || data.session.user; authUI(); showPage('home'); await refresh();
           msg('authmsg', 'Compte créé et connecté. Bienvenue sur StratX.');
-          refresh().catch(error => console.error('StratX dashboard refresh:', error));
         } else {
           msg('authmsg', 'Compte créé. Ouvrez l’e-mail de confirmation envoyé par Supabase, confirmez votre adresse, puis revenez ici pour vous connecter.');
         }
@@ -210,7 +203,8 @@
   function bind() {
     document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
     document.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.goto)));
-    document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; renderGame(); }));
+    document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.showGameHistory = false; renderGame(); }));
+    $('toggleGameHistory')?.addEventListener('click', () => { state.showGameHistory = !state.showGameHistory; renderGame(); });
     $('login').addEventListener('click', () => { toggleSignupFields(false); runAuth('login'); });
     $('signup').addEventListener('click', () => {
       if (!$('signupNameWrap')?.classList.contains('signup-mode')) {
@@ -236,7 +230,7 @@
     $('gameform').addEventListener('submit', async e => {
       e.preventDefault(); if (!state.user) return;
       const raw=$('multiplier').value; const observed = $('observedAt').value ? new Date($('observedAt').value).toISOString() : new Date().toISOString(); const btn=e.submitter; if(btn) btn.disabled=true;
-      try { const { error } = await db.from('game_observations').insert({ user_id: state.user.id, game_name: state.activeGame, multiplier: raw === '' ? null : Number(raw), note: $('gamenote').value.trim() || null, observed_at: observed }); if(error) throw error; e.target.reset(); $('gamename').value=state.activeGame; msg('gamemsg',`Observation ${state.activeGame} enregistrée.`); await refresh(); }
+      try { const { error } = await db.from('game_observations').insert({ user_id: state.user.id, game_name: state.activeGame, multiplier: raw === '' ? null : Number(raw), note: null, observed_at: observed }); if(error) throw error; e.target.reset(); $('gamename').value=state.activeGame; msg('gamemsg',`Observation ${state.activeGame} enregistrée.`); await refresh(); }
       catch(error) { msg('gamemsg',friendlyError(error),true); } finally { if(btn) btn.disabled=false; }
     });
     $('postform').addEventListener('submit', async e => {
@@ -266,19 +260,7 @@
     try {
       const { data, error } = await db.auth.getSession(); if(error) throw error; state.user=data.session?.user || null; authUI();
       if(state.user) { setStatus('Connecté'); await refresh(); } else setStatus('En attente de connexion');
-      db.auth.onAuthStateChange((event, session) => {
-        state.user = session?.user || null;
-        if (!state.user && $('displayName')) delete $('displayName').dataset.loaded;
-        authUI();
-        if (state.user) {
-          setStatus('Connecté');
-          showPage('home');
-          if (event !== 'INITIAL_SESSION') setTimeout(() => refresh(), 0);
-        } else {
-          setStatus('En attente de connexion');
-          state.posts=[]; state.sports=[]; state.games=[];
-        }
-      });
+      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); if(event==='SIGNED_IN') showPage('home'); if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.sports=[]; state.games=[]; } });
     } catch(error) { setStatus('Erreur de connexion',false); msg('authmsg',friendlyError(error),true); console.error('StratX auth init:',error); }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

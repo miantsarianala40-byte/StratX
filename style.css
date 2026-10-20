@@ -10,3 +10,14 @@
 .account-delete-box{border-top:1px solid rgba(255,255,255,.09);margin-top:22px;padding-top:18px}.account-delete-box h4{margin:0 0 8px;color:#f0c2b9}.account-delete-box p{font-size:.86rem;line-height:1.65;color:var(--muted,#a6abb5)}.danger-btn{border-color:rgba(244,118,105,.4)!important;color:#f3a69c!important}.post-delete,.comment-delete{color:#f3a69c!important;border-color:rgba(244,118,105,.24)!important}.comment-list{display:grid;gap:10px;margin:10px 0}.comment-content{min-width:0;flex:1}.comment-content small{display:block;color:var(--muted,#a6abb5);font-size:.72rem;margin-top:5px}.comment-delete{font-size:.72rem;padding:5px 8px;border:1px solid;border-radius:8px;background:transparent;align-self:flex-start;cursor:pointer}.local-comment{align-items:flex-start}.community-post-card .post-actions{flex-wrap:wrap}
 .home-intelligence-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;margin-top:20px}.home-mini-list{display:grid;gap:12px}.home-mini-row{display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.06)}.home-mini-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:12px;background:rgba(231,189,97,.1);color:#e7bd61;flex-shrink:0}.home-mini-row b{display:block;font-size:.9rem}.home-mini-row small{display:block;color:var(--muted,#a6abb5);margin-top:3px}.home-status-pill{margin-left:auto;font-size:.65rem;letter-spacing:.08em;border:1px solid rgba(231,189,97,.22);color:#e7bd61;border-radius:999px;padding:5px 8px;white-space:nowrap}.home-note-list{padding-left:18px;color:var(--muted,#a6abb5);line-height:1.9}.home-note-list li::marker{color:#e7bd61}
 @media(max-width:760px){.home-intelligence-grid{grid-template-columns:1fr}.locked-feature{min-height:380px;padding:32px 18px}.locked-feature p{font-size:.92rem}}
+
+/* StratX targeted update: result view, complete profile and locked sports controls */
+.analysis-result-panel{border-color:#68532f;background:radial-gradient(ellipse at 8% 0,#3a2b17,transparent 58%),linear-gradient(145deg,#171a20,#101319)}
+.analysis-result{padding:20px;border:1px solid #5b492b;border-radius:14px;background:linear-gradient(135deg,#1b1a16,#0c1015);margin:14px 0}
+.analysis-result-value{font-size:clamp(30px,4vw,42px);color:#f1d58e;margin:10px 0 4px;letter-spacing:-1.2px}
+.analysis-result .subtle{margin-bottom:0}
+.profile-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin:0 0 14px}
+.profile-bio-card{padding:18px 20px;margin-bottom:14px!important;border-color:#3a414c}
+.profile-bio-card p{margin:9px 0 0;color:#c4cbd4;white-space:pre-wrap;overflow-wrap:anywhere}
+button:disabled{cursor:not-allowed!important;opacity:.48;filter:saturate(.5)}
+@media(max-width:620px){.profile-metrics{gap:9px}.analysis-result{padding:15px}}
