@@ -4,7 +4,7 @@
   const SUPABASE_KEY = 'sb_publishable_IFZGXyCPkt_eZFjaDdWOaA_LYZ1UdEg';
   const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
   const $ = id => document.getElementById(id);
-  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
+  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', gameSection: 'overview', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
   const gameInfo = {
     Aviator: { desc: 'Consignez les observations passées du jeu Aviator et consultez un résumé descriptif.', logo: '✈', cls: 'aviator-logo' },
     JetX: { desc: 'Un espace dédié pour garder un historique personnel des observations JetX.', logo: 'JX', cls: 'jetx-logo' },
@@ -48,7 +48,46 @@
     say('profileBioPreview', meta.bio || 'Ajoutez une présentation pour compléter votre profil.');
     if ($('displayName') && !$('displayName').dataset.loaded) { $('displayName').value = meta.display_name || ''; $('profileBio').value = meta.bio || ''; $('displayName').dataset.loaded = 'yes'; }
   }
-  function showPage(id) {
+  const gameSlug = { aviator: 'Aviator', jetx: 'JetX', cosmox: 'CosmoX' };
+  const gameRouteSections = new Set(['resultats', 'historique', 'statistiques', 'ajouter']);
+  function parseRoute() {
+    const path = decodeURIComponent(window.location.pathname).replace(/\/+$/, '') || '/';
+    const parts = path.split('/').filter(Boolean);
+    const first = (parts[0] || '').toLowerCase();
+    if (gameSlug[first]) {
+      const section = (parts[1] || 'overview').toLowerCase();
+      return { page: 'games', game: gameSlug[first], section: gameRouteSections.has(section) ? section : 'overview', path };
+    }
+    const fixed = {
+      '/': { page: 'home' }, '/accueil': { page: 'home' }, '/connexion': { page: 'auth' },
+      '/inscription': { page: 'auth', authMode: 'signup' }, '/mot-de-passe-oublie': { page: 'auth', authMode: 'reset' },
+      '/jeux': { page: 'games' }, '/communaute': { page: 'community' }, '/profil': { page: 'profile' }
+    };
+    return { ...(fixed[path] || fixed['/']), path };
+  }
+  function routeForCurrentPage(id) {
+    if (id === 'games') return `/${state.activeGame.toLowerCase()}${state.gameSection && state.gameSection !== 'overview' ? '/' + state.gameSection : ''}`;
+    return ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil' })[id] || '/accueil';
+  }
+  function syncRouteFromUrl() {
+    const route = parseRoute();
+    if (!state.user) {
+      $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
+      if (route.page === 'auth') { if (route.authMode === 'signup') toggleSignupFields(true); else toggleSignupFields(false); }
+      return;
+    }
+    $('auth')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
+    if (route.page === 'auth') { history.replaceState({}, '', '/accueil'); return showPage('home', false); }
+    if (route.game) {
+      state.activeGame = route.game;
+      state.gameSection = route.section || 'overview';
+      state.showGameHistory = state.gameSection === 'historique';
+      document.querySelectorAll('.game-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.game === route.game));
+    }
+    showPage(route.page, false);
+    if (route.page === 'auth' && route.authMode === 'reset') toggleSignupFields(false);
+  }
+  function showPage(id, updateUrl = true) {
     if (id === 'sports') { setStatus('Module football verrouillé temporairement', false); return; }
     if (!$(`${id}`) || !$(`${id}`).classList.contains('page')) return;
     state.currentPage = id;
@@ -56,6 +95,7 @@
     document.querySelectorAll('[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page === id));
     if (id === 'games') renderGame();
     if (id === 'profile') authUI();
+    if (updateUrl) history.pushState({}, '', routeForCurrentPage(id));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   function createRecord(title, body, date, eyebrow) {
@@ -146,6 +186,19 @@
     if (result) { result.replaceChildren(); if (latest) { const label=document.createElement('div'); label.className='eyebrow'; label.textContent='DERNIÈRE OBSERVATION ENREGISTRÉE'; const value=document.createElement('h3'); value.className='analysis-result-value'; value.textContent=latest.multiplier == null ? 'Observation enregistrée' : `${Number(latest.multiplier).toFixed(2)}x`; const date=document.createElement('p'); date.className='subtle'; date.textContent=formatDate(latest.observed_at || latest.created_at); result.append(label,value,date); } else { const label=document.createElement('div'); label.className='eyebrow'; label.textContent='RÉSULTAT'; const value=document.createElement('h3'); value.textContent='Aucune observation enregistrée'; const date=document.createElement('p'); date.className='subtle'; date.textContent='Enregistrez une valeur observée pour l’afficher ici.'; result.append(label,value,date); } }
     const history = $('historyPanel'); if (history) history.classList.toggle('hide', !state.showGameHistory);
     const historyButton = $('toggleGameHistory'); if (historyButton) historyButton.textContent = state.showGameHistory ? 'Masquer l’historique précédent' : 'Afficher l’historique précédent';
+    const section = gameRouteSections.has(state.gameSection) ? state.gameSection : 'overview';
+    const statsPanel = document.querySelector('#games .game-stats');
+    const addPanel = $('gameform')?.closest('.surface');
+    const resultsPanel = $('analysisResult')?.closest('.analysis-result-panel');
+    const historyPanel = $('historyTitle')?.closest('.surface');
+    const panels = { statistiques: statsPanel, ajouter: addPanel, resultats: resultsPanel, historique: historyPanel };
+    Object.entries(panels).forEach(([key, panel]) => { if (panel) panel.classList.toggle('hide', section !== 'overview' && section !== key); });
+    document.querySelectorAll('[data-game-section]').forEach(btn => {
+      const active = btn.dataset.gameSection === section;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-current', active ? 'page' : 'false');
+    });
+    if (section === 'historique') { state.showGameHistory = true; if (history) history.classList.remove('hide'); }
     renderList('gameslist', rows, r => ({ title: r.multiplier == null ? 'Observation sans valeur numérique' : `Valeur observée : ${Number(r.multiplier).toFixed(2)}x`, body: '', date: r.observed_at || r.created_at, eyebrow: name.toUpperCase() }), `Aucune observation ${name}`, `Les entrées que vous ajouterez à ${name} seront affichées ici.`);
   }
   function toggleSignupFields(show) {
@@ -178,7 +231,7 @@
         msg('authmsg', 'Connexion réussie. Bienvenue sur StratX.');
       } else if (action === 'signup') {
         const displayName = $('signupName').value.trim();
-        const redirectUrl = window.location.href.split('#')[0];
+        const redirectUrl = window.location.origin + '/connexion';
         const { data, error } = await db.auth.signUp({
           email,
           password,
@@ -192,7 +245,7 @@
           msg('authmsg', 'Compte créé. Ouvrez l’e-mail de confirmation envoyé par Supabase, confirmez votre adresse, puis revenez ici pour vous connecter.');
         }
       } else {
-        const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.href.split('#')[0] });
+        const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/mot-de-passe-oublie' });
         if (error) throw error;
         msg('authmsg', 'Si cette adresse correspond à un compte, un e-mail de réinitialisation sera envoyé.');
       }
@@ -203,24 +256,26 @@
   function bind() {
     document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
     document.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.goto)));
-    document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.showGameHistory = false; renderGame(); }));
-    $('toggleGameHistory')?.addEventListener('click', () => { state.showGameHistory = !state.showGameHistory; renderGame(); });
-    $('login').addEventListener('click', () => { toggleSignupFields(false); runAuth('login'); });
+    document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.gameSection = 'overview'; state.showGameHistory = false; document.querySelectorAll('.game-tab').forEach(tab => tab.classList.toggle('active', tab === btn)); history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
+    document.querySelectorAll('[data-game-section]').forEach(btn => btn.addEventListener('click', () => { const next = btn.dataset.gameSection; if (!['overview', ...gameRouteSections].includes(next)) return; state.gameSection = next; state.showGameHistory = next === 'historique'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
+    $('toggleGameHistory')?.addEventListener('click', () => { state.showGameHistory = !state.showGameHistory; state.gameSection = state.showGameHistory ? 'historique' : 'overview'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); });
+    $('login').addEventListener('click', () => { history.pushState({}, '', '/connexion'); toggleSignupFields(false); runAuth('login'); });
     $('signup').addEventListener('click', () => {
       if (!$('signupNameWrap')?.classList.contains('signup-mode')) {
+        history.pushState({}, '', '/inscription');
         toggleSignupFields(true);
         msg('authmsg', 'Renseignez votre nom affiché, votre e-mail et un mot de passe, puis validez la création du compte.');
         return;
       }
       runAuth('signup');
     });
-    $('resetPassword').addEventListener('click', () => { toggleSignupFields(false); runAuth('reset'); });
+    $('resetPassword').addEventListener('click', () => { history.pushState({}, '', '/mot-de-passe-oublie'); toggleSignupFields(false); runAuth('reset'); });
     $('password').addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); runAuth($('signupNameWrap')?.classList.contains('signup-mode') ? 'signup' : 'login'); }
     });
     $('togglePassword').addEventListener('click', () => { const p=$('password'); p.type = p.type === 'password' ? 'text' : 'password'; });
     $('logout').addEventListener('click', signOut); $('profileLogout').addEventListener('click', signOut); $('refresh').addEventListener('click', refresh);
-    $('sportform').addEventListener('submit', async e => {
+    $('sportform')?.addEventListener('submit', async e => {
       e.preventDefault(); if (!state.user) return;
       const btn=e.submitter; if(btn) btn.disabled=true;
       const date = $('matchdate').value ? new Date($('matchdate').value).toISOString() : null;
@@ -256,11 +311,12 @@
   function initDate() { say('todayDate', new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})); const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); const local=now.toISOString().slice(0,16); if($('observedAt')) $('observedAt').value=local; }
   async function init() {
     bind(); initDate();
+    window.addEventListener('popstate', syncRouteFromUrl);
     if (!db) { setStatus('Supabase indisponible',false); msg('authmsg','Impossible de charger Supabase. Vérifiez la connexion Internet ou la configuration de la bibliothèque.',true); return; }
     try {
       const { data, error } = await db.auth.getSession(); if(error) throw error; state.user=data.session?.user || null; authUI();
-      if(state.user) { setStatus('Connecté'); await refresh(); } else setStatus('En attente de connexion');
-      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); if(event==='SIGNED_IN') showPage('home'); if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.sports=[]; state.games=[]; } });
+      if(state.user) { setStatus('Connecté'); await refresh(); syncRouteFromUrl(); } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
+      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.sports=[]; state.games=[]; } });
     } catch(error) { setStatus('Erreur de connexion',false); msg('authmsg',friendlyError(error),true); console.error('StratX auth init:',error); }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

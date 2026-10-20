@@ -46,6 +46,7 @@ grant usage, select on all sequences in schema public to authenticated;
 drop policy if exists "read analyses" on public.analyses;
 drop policy if exists "insert own analyses" on public.analyses;
 drop policy if exists "read sports" on public.sports_analyses;
+drop policy if exists "read own sports" on public.sports_analyses;
 drop policy if exists "insert own sports" on public.sports_analyses;
 drop policy if exists "read own observations" on public.game_observations;
 drop policy if exists "insert own observations" on public.game_observations;
@@ -53,7 +54,7 @@ drop policy if exists "insert own observations" on public.game_observations;
 -- Community posts and match cards are readable to authenticated members.
 create policy "read analyses" on public.analyses for select to authenticated using (true);
 create policy "insert own analyses" on public.analyses for insert to authenticated with check (auth.uid() = user_id);
-create policy "read sports" on public.sports_analyses for select to authenticated using (true);
+create policy "read own sports" on public.sports_analyses for select to authenticated using (auth.uid() = user_id);
 create policy "insert own sports" on public.sports_analyses for insert to authenticated with check (auth.uid() = user_id);
 -- Game observations remain private to their owner.
 create policy "read own observations" on public.game_observations for select to authenticated using (auth.uid() = user_id);
