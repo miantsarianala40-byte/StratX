@@ -30,7 +30,7 @@
   function authUI() {
     const logged = !!state.user;
     $('auth')?.classList.toggle('hide', logged);
-    $('authVisits')?.classList.add('hide');
+    $('authVisits')?.classList.toggle('hide', logged);
     $('auth')?.classList.toggle('hide', logged);
     $('app')?.classList.toggle('hide', !logged);
     $('logout')?.classList.toggle('hide', !logged);
@@ -75,11 +75,10 @@
     const route = parseRoute();
     if (!state.user) {
       $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
-      const showVisitors = route.page === 'visitors';
-      $('auth')?.classList.toggle('hide', showVisitors);
-      $('authVisits')?.classList.toggle('hide', !showVisitors);
+      $('auth')?.classList.remove('hide');
+      $('authVisits')?.classList.remove('hide');
       if (route.page === 'auth') { if (route.authMode === 'signup') toggleSignupFields(true); else toggleSignupFields(false); }
-      if (showVisitors) trackPublicVisit();
+      if (route.page === 'visitors') trackPublicVisit();
       return;
     }
     $('auth')?.classList.add('hide'); $('authVisits')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
@@ -259,8 +258,8 @@
   }
   async function signOut() { if (!db) return; const { error } = await db.auth.signOut(); if (error) msg('profilemsg', friendlyError(error), true); }
   function bind() {
-    $('openVisitors')?.addEventListener('click', async () => { $('auth')?.classList.add('hide'); $('authVisits')?.classList.remove('hide'); history.pushState({}, '', '/visiteurs'); await trackPublicVisit(); $('authVisits')?.scrollIntoView({behavior:'smooth',block:'start'}); });
-    $('backToLogin')?.addEventListener('click', () => { $('authVisits')?.classList.add('hide'); $('auth')?.classList.remove('hide'); history.pushState({}, '', '/connexion'); window.scrollTo({top:0,behavior:'smooth'}); });
+    $('openVisitors')?.addEventListener('click', async () => { $('auth')?.classList.remove('hide'); $('authVisits')?.classList.remove('hide'); history.pushState({}, '', '/visiteurs'); await trackPublicVisit(); $('authVisits')?.scrollIntoView({behavior:'smooth',block:'start'}); });
+    $('backToLogin')?.addEventListener('click', () => { $('authVisits')?.classList.remove('hide'); $('auth')?.classList.remove('hide'); history.pushState({}, '', '/connexion'); window.scrollTo({top:0,behavior:'smooth'}); });
     $('visitPrev')?.addEventListener('click', () => { state.visitorPage=Math.max(0,state.visitorPage-1); renderVisitorPage(); });
     $('visitNext')?.addEventListener('click', () => { const max=Math.max(0,Math.ceil(state.visitorRows.length/25)-1); state.visitorPage=Math.min(max,state.visitorPage+1); renderVisitorPage(); });
     document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
@@ -313,21 +312,38 @@
   }
   function initDate() { say('todayDate', new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})); const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); const local=now.toISOString().slice(0,16); if($('observedAt')) $('observedAt').value=local; }
 
-  function getDeviceBrand() {
+  async function getDeviceBrand() {
     const ua = navigator.userAgent || '';
-    if (/iPhone|iPad|iPod/i.test(ua)) return 'Apple · iPhone/iPad';
-    if (/Samsung|SM-[A-Z0-9]+|SAMSUNG/i.test(ua)) return 'Samsung Galaxy';
-    if (/Redmi|POCO|Mi\s|Xiaomi/i.test(ua)) return 'Xiaomi · Redmi/POCO';
-    if (/HUAWEI|HONOR/i.test(ua)) return 'Huawei / Honor';
-    if (/OPPO/i.test(ua)) return 'OPPO';
-    if (/vivo/i.test(ua)) return 'vivo';
-    if (/TECNO/i.test(ua)) return 'TECNO';
-    if (/Infinix/i.test(ua)) return 'Infinix';
-    if (/Pixel/i.test(ua)) return 'Google Pixel';
-    if (/Android/i.test(ua)) return 'Android · marque non précisée';
-    if (/Windows/i.test(ua)) return 'PC Windows';
-    if (/Macintosh|Mac OS/i.test(ua)) return 'Apple · Mac';
-    if (/Linux/i.test(ua)) return 'Ordinateur Linux';
+    let platform = navigator.userAgentData?.platform || navigator.platform || '';
+    let model = navigator.userAgentData?.model || '';
+    try {
+      if (navigator.userAgentData?.getHighEntropyValues) {
+        const hints = await navigator.userAgentData.getHighEntropyValues(['model', 'platform']);
+        model = hints.model || model; platform = hints.platform || platform;
+      }
+    } catch (_) { /* Certains navigateurs masquent volontairement le modèle exact. */ }
+    const source = `${model} ${ua} ${platform}`;
+    if (/iPhone/i.test(source)) return model ? `Apple · ${model}` : 'Apple · iPhone';
+    if (/iPad/i.test(source)) return 'Apple · iPad';
+    if (/iPod/i.test(source)) return 'Apple · iPod';
+    if (/SM-[A-Z0-9]+|Samsung|SAMSUNG/i.test(source)) {
+      const match = source.match(/SM-[A-Z0-9]+/i);
+      return match ? `Samsung · ${match[0].toUpperCase()}` : 'Samsung Galaxy';
+    }
+    if (/Redmi/i.test(source)) { const m=source.match(/Redmi\s[^;,)]+/i); return m ? `Xiaomi · ${m[0].trim()}` : 'Xiaomi · Redmi'; }
+    if (/POCO/i.test(source)) { const m=source.match(/POCO\s[^;,)]+/i); return m ? `Xiaomi · ${m[0].trim()}` : 'Xiaomi · POCO'; }
+    if (/Xiaomi|Mi\s/i.test(source)) return 'Xiaomi · Mi';
+    if (/HUAWEI/i.test(source)) { const m=source.match(/HUAWEI\s[^;,)]+/i); return m ? `Huawei · ${m[0].trim()}` : 'Huawei'; }
+    if (/HONOR/i.test(source)) return 'HONOR';
+    if (/TECNO/i.test(source)) { const m=source.match(/TECNO\s[^;,)]+/i); return m ? m[0].trim() : 'TECNO'; }
+    if (/Infinix/i.test(source)) { const m=source.match(/Infinix\s[^;,)]+/i); return m ? m[0].trim() : 'Infinix'; }
+    if (/OPPO/i.test(source)) { const m=source.match(/OPPO\s[^;,)]+/i); return m ? m[0].trim() : 'OPPO'; }
+    if (/vivo/i.test(source)) { const m=source.match(/vivo\s[^;,)]+/i); return m ? m[0].trim() : 'vivo'; }
+    if (/Pixel/i.test(source)) return 'Google Pixel';
+    if (/Android/i.test(source)) return 'Android · modèle masqué par le navigateur';
+    if (/Windows/i.test(source)) return 'PC Windows';
+    if (/Macintosh|Mac OS/i.test(source)) return 'Apple · Mac';
+    if (/Linux/i.test(source)) return 'Ordinateur Linux';
     return 'Appareil non identifié';
   }
   function getVisitorKey() {
@@ -373,7 +389,7 @@
     try {
       const visitorKey = getVisitorKey();
       if (visitorKey) {
-        const { error: insertError } = await db.from('public_page_visits').upsert({ visitor_key: visitorKey, device_label: getDeviceBrand() }, { onConflict: 'visitor_key', ignoreDuplicates: true });
+        const { error: insertError } = await db.from('public_page_visits').upsert({ visitor_key: visitorKey, device_label: await getDeviceBrand() }, { onConflict: 'visitor_key', ignoreDuplicates: true });
         if (insertError) throw insertError;
       }
       // Fetch every row in bounded pages so the visitor list is complete without one oversized request.
