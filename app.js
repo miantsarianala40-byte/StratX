@@ -33,6 +33,8 @@
     $('app')?.classList.toggle('hide', !logged);
     $('logout')?.classList.toggle('hide', !logged);
     if (!logged) return;
+    // Always land on the home dashboard after a valid session is detected.
+    if ($('app') && $('home') && state.currentPage !== 'home') showPage('home');
     const meta = state.user.user_metadata || {};
     const displayName = meta.display_name || 'Membre StratX';
     say('welcomeName', displayName);
@@ -162,9 +164,21 @@
     ['login','signup','resetPassword'].forEach(id => { const b = $(id); if (b) b.disabled = true; });
     try {
       if (action === 'login') {
-        const { error } = await db.auth.signInWithPassword({ email, password });
+        const { data, error } = await db.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        msg('authmsg', 'Connexion réussie. Ouverture de votre espace…');
+        // Do not rely only on the asynchronous auth-state event to open the dashboard.
+        state.user = data?.user || data?.session?.user || null;
+        if (!state.user) {
+          const { data: sessionData, error: sessionError } = await db.auth.getSession();
+          if (sessionError) throw sessionError;
+          state.user = sessionData?.session?.user || null;
+        }
+        if (!state.user) throw new Error('Connexion acceptée mais session absente. Vérifiez la configuration Auth de Supabase.');
+        authUI();
+        showPage('home');
+        setStatus('Connecté');
+        msg('authmsg', 'Connexion réussie. Bienvenue sur StratX.');
+        refresh().catch(error => console.error('StratX dashboard refresh:', error));
       } else if (action === 'signup') {
         const displayName = $('signupName').value.trim();
         const redirectUrl = window.location.href.split('#')[0];
@@ -175,7 +189,12 @@
         });
         if (error) throw error;
         if (data.session) {
-          msg('authmsg', 'Compte créé et connecté. Ouverture de votre espace…');
+          state.user = data.user || data.session.user;
+          authUI();
+          showPage('home');
+          setStatus('Connecté');
+          msg('authmsg', 'Compte créé et connecté. Bienvenue sur StratX.');
+          refresh().catch(error => console.error('StratX dashboard refresh:', error));
         } else {
           msg('authmsg', 'Compte créé. Ouvrez l’e-mail de confirmation envoyé par Supabase, confirmez votre adresse, puis revenez ici pour vous connecter.');
         }
@@ -247,7 +266,19 @@
     try {
       const { data, error } = await db.auth.getSession(); if(error) throw error; state.user=data.session?.user || null; authUI();
       if(state.user) { setStatus('Connecté'); await refresh(); } else setStatus('En attente de connexion');
-      db.auth.onAuthStateChange((_event, session) => { state.user=session?.user || null; if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.sports=[]; state.games=[]; } });
+      db.auth.onAuthStateChange((event, session) => {
+        state.user = session?.user || null;
+        if (!state.user && $('displayName')) delete $('displayName').dataset.loaded;
+        authUI();
+        if (state.user) {
+          setStatus('Connecté');
+          showPage('home');
+          if (event !== 'INITIAL_SESSION') setTimeout(() => refresh(), 0);
+        } else {
+          setStatus('En attente de connexion');
+          state.posts=[]; state.sports=[]; state.games=[];
+        }
+      });
     } catch(error) { setStatus('Erreur de connexion',false); msg('authmsg',friendlyError(error),true); console.error('StratX auth init:',error); }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
