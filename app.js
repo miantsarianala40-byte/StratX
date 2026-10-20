@@ -4,7 +4,7 @@
   const SUPABASE_KEY = 'sb_publishable_IFZGXyCPkt_eZFjaDdWOaA_LYZ1UdEg';
   const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
   const $ = id => document.getElementById(id);
-  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', gameSection: 'overview', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
+  const state = { visitorRows: [], visitorPage: 0, currentPage: 'home', activeGame: 'Aviator', gameSection: 'overview', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
   const gameInfo = {
     Aviator: { desc: 'Consignez les observations passées du jeu Aviator et consultez un résumé descriptif.', logo: '✈', cls: 'aviator-logo' },
     JetX: { desc: 'Un espace dédié pour garder un historique personnel des observations JetX.', logo: 'JX', cls: 'jetx-logo' },
@@ -30,7 +30,8 @@
   function authUI() {
     const logged = !!state.user;
     $('auth')?.classList.toggle('hide', logged);
-    $('authVisits')?.classList.toggle('hide', logged);
+    $('authVisits')?.classList.add('hide');
+    $('auth')?.classList.toggle('hide', logged);
     $('app')?.classList.toggle('hide', !logged);
     $('logout')?.classList.toggle('hide', !logged);
     if (!logged) return;
@@ -61,7 +62,7 @@
     }
     const fixed = {
       '/': { page: 'home' }, '/accueil': { page: 'home' }, '/connexion': { page: 'auth' },
-      '/inscription': { page: 'auth', authMode: 'signup' }, '/mot-de-passe-oublie': { page: 'auth', authMode: 'reset' },
+      '/inscription': { page: 'auth', authMode: 'signup' }, '/mot-de-passe-oublie': { page: 'auth', authMode: 'reset' }, '/visiteurs': { page: 'visitors' },
       '/jeux': { page: 'games' }, '/communaute': { page: 'community' }, '/profil': { page: 'profile' }
     };
     return { ...(fixed[path] || fixed['/']), path };
@@ -73,8 +74,12 @@
   function syncRouteFromUrl() {
     const route = parseRoute();
     if (!state.user) {
-      $('auth')?.classList.remove('hide'); $('authVisits')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
+      $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
+      const showVisitors = route.page === 'visitors';
+      $('auth')?.classList.toggle('hide', showVisitors);
+      $('authVisits')?.classList.toggle('hide', !showVisitors);
       if (route.page === 'auth') { if (route.authMode === 'signup') toggleSignupFields(true); else toggleSignupFields(false); }
+      if (showVisitors) trackPublicVisit();
       return;
     }
     $('auth')?.classList.add('hide'); $('authVisits')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
@@ -254,6 +259,10 @@
   }
   async function signOut() { if (!db) return; const { error } = await db.auth.signOut(); if (error) msg('profilemsg', friendlyError(error), true); }
   function bind() {
+    $('openVisitors')?.addEventListener('click', async () => { $('auth')?.classList.add('hide'); $('authVisits')?.classList.remove('hide'); history.pushState({}, '', '/visiteurs'); await trackPublicVisit(); $('authVisits')?.scrollIntoView({behavior:'smooth',block:'start'}); });
+    $('backToLogin')?.addEventListener('click', () => { $('authVisits')?.classList.add('hide'); $('auth')?.classList.remove('hide'); history.pushState({}, '', '/connexion'); window.scrollTo({top:0,behavior:'smooth'}); });
+    $('visitPrev')?.addEventListener('click', () => { state.visitorPage=Math.max(0,state.visitorPage-1); renderVisitorPage(); });
+    $('visitNext')?.addEventListener('click', () => { const max=Math.max(0,Math.ceil(state.visitorRows.length/25)-1); state.visitorPage=Math.min(max,state.visitorPage+1); renderVisitorPage(); });
     document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
     document.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.goto)));
     document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.gameSection = 'overview'; state.showGameHistory = false; document.querySelectorAll('.game-tab').forEach(tab => tab.classList.toggle('active', tab === btn)); history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
@@ -304,54 +313,82 @@
   }
   function initDate() { say('todayDate', new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})); const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); const local=now.toISOString().slice(0,16); if($('observedAt')) $('observedAt').value=local; }
 
-  async function trackPublicVisit() {
-    const tableBody = $('recentVisits');
-    const notice = $('visitNotice');
-    if (!db) {
-      if (tableBody) tableBody.innerHTML = '<tr><td colspan="3" class="visit-status">Tsy afaka mifandray amin’ny compteur amin’izao fotoana izao.</td></tr>';
-      return;
-    }
+  function getDeviceBrand() {
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'Apple · iPhone/iPad';
+    if (/Samsung|SM-[A-Z0-9]+|SAMSUNG/i.test(ua)) return 'Samsung Galaxy';
+    if (/Redmi|POCO|Mi\s|Xiaomi/i.test(ua)) return 'Xiaomi · Redmi/POCO';
+    if (/HUAWEI|HONOR/i.test(ua)) return 'Huawei / Honor';
+    if (/OPPO/i.test(ua)) return 'OPPO';
+    if (/vivo/i.test(ua)) return 'vivo';
+    if (/TECNO/i.test(ua)) return 'TECNO';
+    if (/Infinix/i.test(ua)) return 'Infinix';
+    if (/Pixel/i.test(ua)) return 'Google Pixel';
+    if (/Android/i.test(ua)) return 'Android · marque non précisée';
+    if (/Windows/i.test(ua)) return 'PC Windows';
+    if (/Macintosh|Mac OS/i.test(ua)) return 'Apple · Mac';
+    if (/Linux/i.test(ua)) return 'Ordinateur Linux';
+    return 'Appareil non identifié';
+  }
+  function getVisitorKey() {
+    const keyName = 'stratx_visitor_key_v1';
     try {
-      // Compte once per browser session. Public visits are deliberately anonymous.
-      let shouldRecord = true;
-      try { shouldRecord = sessionStorage.getItem('stratx_visit_recorded') !== 'yes'; } catch (_) {}
-      if (shouldRecord) {
-        const { error: insertError } = await db.from('public_page_visits').insert({});
+      let key = localStorage.getItem(keyName);
+      if (!key) {
+        key = crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r=Math.random()*16|0; return (c==='x'?r:(r&3|8)).toString(16); });
+        localStorage.setItem(keyName, key);
+      }
+      return key;
+    } catch (_) {
+      // Without persistent browser storage, a durable one-visit guarantee is not possible.
+      return null;
+    }
+  }
+  function renderVisitorPage() {
+    const body = $('recentVisits'); if (!body) return;
+    const pageSize = 25, total = state.visitorRows.length;
+    const pages = Math.max(1, Math.ceil(total/pageSize));
+    state.visitorPage = Math.min(state.visitorPage, pages-1);
+    const rows = state.visitorRows.slice(state.visitorPage*pageSize, (state.visitorPage+1)*pageSize);
+    body.replaceChildren();
+    if (!rows.length) { const tr=document.createElement('tr'), td=document.createElement('td'); td.colSpan=4; td.className='visit-status'; td.textContent='Mbola tsy misy mpitsidika voarakitra.'; tr.append(td); body.append(tr); }
+    rows.forEach((visit, index) => {
+      const tr=document.createElement('tr');
+      const number=document.createElement('td'); number.textContent=String(state.visitorPage*pageSize+index+1).padStart(2,'0');
+      const deviceCell=document.createElement('td'), device=document.createElement('div'); device.className='visit-person';
+      const avatar=document.createElement('span'); avatar.className='visit-avatar'; avatar.textContent=/Apple/i.test(visit.device_label||'')?'':/Samsung/i.test(visit.device_label||'')?'S':/Xiaomi/i.test(visit.device_label||'')?'X':'D';
+      const details=document.createElement('span'); details.className='visit-person-copy'; const name=document.createElement('b'); name.textContent=visit.device_label || 'Appareil non identifié'; const sub=document.createElement('small'); sub.textContent='Visiteur anonyme · identifiant privé'; details.append(name,sub); device.append(avatar,details); deviceCell.append(device);
+      const dateCell=document.createElement('td'); const date=document.createElement('time'); date.className='recent-visit-date'; date.dateTime=visit.visited_at; date.textContent=formatDate(visit.visited_at); dateCell.append(date);
+      const statusCell=document.createElement('td'); const status=document.createElement('span'); status.className='visit-status-pill'; status.innerHTML='<i></i> Unique'; statusCell.append(status);
+      tr.append(number,deviceCell,dateCell,statusCell); body.append(tr);
+    });
+    say('visitPageInfo', total ? `Affichage ${state.visitorPage*pageSize+1}–${Math.min((state.visitorPage+1)*pageSize,total)} sur ${total} visiteurs` : '0 visiteur');
+    if ($('visitPrev')) $('visitPrev').disabled=state.visitorPage===0;
+    if ($('visitNext')) $('visitNext').disabled=state.visitorPage>=pages-1;
+    say('visitCount', total.toLocaleString('fr-FR')); say('visitorButtonCount', `(${total})`);
+  }
+  async function trackPublicVisit() {
+    const tableBody = $('recentVisits'); const notice = $('visitNotice');
+    if (!db) { if (tableBody) { tableBody.replaceChildren(); const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=4;td.className='visit-status';td.textContent='Compteur indisponible : vérifiez Supabase.';tr.append(td);tableBody.append(tr);} return; }
+    try {
+      const visitorKey = getVisitorKey();
+      if (visitorKey) {
+        const { error: insertError } = await db.from('public_page_visits').upsert({ visitor_key: visitorKey, device_label: getDeviceBrand() }, { onConflict: 'visitor_key', ignoreDuplicates: true });
         if (insertError) throw insertError;
-        try { sessionStorage.setItem('stratx_visit_recorded', 'yes'); } catch (_) {}
       }
-      const [{ count, error: countError }, { data, error: recentError }] = await Promise.all([
-        db.from('public_page_visits').select('id', { count: 'exact', head: true }),
-        db.from('public_page_visits').select('visited_at').order('visited_at', { ascending: false }).limit(8)
-      ]);
-      if (countError) throw countError;
-      if (recentError) throw recentError;
-      say('visitCount', Number(count || 0).toLocaleString('fr-FR'));
-      if (tableBody) {
-        tableBody.replaceChildren();
-        if (!data?.length) {
-          const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 3; td.className = 'visit-status'; td.textContent = 'Mbola tsy misy fitsidihana voatahiry.'; tr.append(td); tableBody.append(tr);
-        } else {
-          data.forEach((visit, index) => {
-            const tr = document.createElement('tr');
-            const visitorCell = document.createElement('td');
-            const visitor = document.createElement('div'); visitor.className = 'visit-person';
-            const avatar = document.createElement('span'); avatar.className = 'visit-avatar'; avatar.textContent = 'V';
-            const details = document.createElement('span'); details.className = 'visit-person-copy';
-            const name = document.createElement('b'); name.textContent = `Visiteur anonyme ${index + 1}`;
-            const sub = document.createElement('small'); sub.textContent = 'Session navigateur';
-            details.append(name, sub); visitor.append(avatar, details); visitorCell.append(visitor);
-            const dateCell = document.createElement('td'); const date = document.createElement('time'); date.className = 'recent-visit-date'; date.dateTime = visit.visited_at; date.textContent = formatDate(visit.visited_at); dateCell.append(date);
-            const statusCell = document.createElement('td'); const status = document.createElement('span'); status.className = 'visit-status-pill'; status.innerHTML = '<i></i> Enregistrée'; statusCell.append(status);
-            tr.append(visitorCell, dateCell, statusCell); tableBody.append(tr);
-          });
-        }
+      // Fetch every row in bounded pages so the visitor list is complete without one oversized request.
+      let all = [], from = 0, chunk = 500;
+      while (true) {
+        const { data, error } = await db.from('public_page_visits').select('visitor_key,device_label,visited_at').order('visited_at',{ascending:false}).range(from,from+chunk-1);
+        if (error) throw error;
+        all = all.concat(data || []); if (!data || data.length < chunk) break; from += chunk;
       }
-      if (notice) notice.textContent = 'Chaque ligne représente une visite enregistrée ; une session navigateur ne compte qu’une fois. Les identités réelles ne sont pas collectées.';
+      state.visitorRows = all; state.visitorPage = 0; renderVisitorPage();
+      if (notice) notice.textContent = 'Ny marika dia vinavinaina avy amin’ny navigateur. Tsy aseho ny anarana, e-mail na IP.';
     } catch (error) {
-      say('visitCount', '—');
-      if (tableBody) { tableBody.replaceChildren(); const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 3; td.className = 'visit-status'; td.textContent = 'Compteur non activé. Exécutez le bloc SQL de schema.sql dans Supabase, puis rechargez la page.'; tr.append(td); tableBody.append(tr); }
-      if (notice) notice.textContent = 'Vérifiez la configuration Supabase et les règles de la table public_page_visits.';
+      say('visitCount','—'); say('visitorButtonCount','');
+      if (tableBody) { tableBody.replaceChildren(); const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=4;td.className='visit-status';td.textContent='Tsy mandeha ny compteur. Alefaso aloha ny SQL ao amin’ny schema.sql, dia avereno ny pejy.';tr.append(td);tableBody.append(tr); }
+      if (notice) notice.textContent='Jereo ny configuration Supabase sy ny policies amin’ny public_page_visits.';
       console.warn('StratX visit counter:', error?.message || error);
     }
   }

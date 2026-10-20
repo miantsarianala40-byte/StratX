@@ -103,17 +103,23 @@ create policy "insert own account deletion request" on public.account_deletion_r
 create policy "read own account deletion request" on public.account_deletion_requests for select to authenticated using (auth.uid() = user_id);
 
 
--- Compteur public des visites de la page de connexion.
--- N'enregistre aucune identité, adresse e-mail ni adresse IP.
+-- StratX visitor counter: one row per persistent browser identifier.
 create table if not exists public.public_page_visits (
-  id bigint generated always as identity primary key,
+  visitor_key uuid primary key,
+  device_label text not null default 'Appareil non identifié',
   visited_at timestamptz not null default now()
 );
+alter table public.public_page_visits add column if not exists visitor_key uuid;
+alter table public.public_page_visits add column if not exists device_label text not null default 'Appareil non identifié';
+alter table public.public_page_visits add column if not exists visited_at timestamptz not null default now();
+-- Older anonymous visit rows receive identifiers so the unique constraint can be enabled.
+update public.public_page_visits set visitor_key = gen_random_uuid() where visitor_key is null;
+create unique index if not exists public_page_visits_visitor_key_uidx on public.public_page_visits(visitor_key);
 create index if not exists public_page_visits_visited_at_idx on public.public_page_visits(visited_at desc);
+alter table public.public_page_visits alter column visitor_key set not null;
 alter table public.public_page_visits enable row level security;
 grant select, insert on public.public_page_visits to anon, authenticated;
-grant usage, select on sequence public.public_page_visits_id_seq to anon, authenticated;
-drop policy if exists "public can record anonymous page visits" on public.public_page_visits;
-drop policy if exists "public can read anonymous page visits" on public.public_page_visits;
-create policy "public can record anonymous page visits" on public.public_page_visits for insert to anon, authenticated with check (true);
-create policy "public can read anonymous page visits" on public.public_page_visits for select to anon, authenticated using (true);
+drop policy if exists "public can read page visits" on public.public_page_visits;
+drop policy if exists "public can register page visit" on public.public_page_visits;
+create policy "public can read page visits" on public.public_page_visits for select to anon, authenticated using (true);
+create policy "public can register page visit" on public.public_page_visits for insert to anon, authenticated with check (visitor_key is not null and char_length(device_label) <= 100);
