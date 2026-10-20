@@ -1,1 +1,65 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>StratX Premium</title><link rel="stylesheet" href="style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script defer src="app.js"></script></head><body><header><b class="logo">SX <span>StratX</span></b><span id="status">Initialisation…</span><button id="logout" class="hide">Déconnexion</button></header><main><section id="auth" class="panel"><small>SPORTS INTELLIGENCE</small><h1>Analyse. <em>Stratégie.</em><br>Performance.</h1><input id="email" type="email" placeholder="Adresse e-mail"><input id="password" type="password" placeholder="Mot de passe (6 caractères minimum)"><div class="buttons"><button id="login">Connexion</button><button id="signup" class="secondary">Créer un compte</button></div><p id="authmsg"></p></section><section id="app" class="hide"><div class="hero"><small>TABLEAU DE BORD</small><h1>Bienvenue sur <em>StratX</em></h1><p>Votre espace premium d’analyses et de statistiques.</p></div><nav><button data-page="home" class="active">⌂<b>Accueil</b></button><button data-page="sports">⚽<b>Paris sportifs</b></button><button data-page="games">▥<b>Aviator / JetX / CosmoX</b></button><button data-page="community">◉<b>Communauté</b></button><button data-page="profile">♙<b>Mon profil</b></button></nav><section id="home" class="page"><div class="metrics"><article><small>Analyses partagées</small><strong id="countPosts">—</strong></article><article><small>Fiches de matchs</small><strong id="countSports">—</strong></article><article><small>Observations</small><strong id="countGames">—</strong></article></div><div class="panel"><h2>Dernières analyses</h2><button id="refresh">Actualiser</button><div id="latest"></div></div></section><section id="sports" class="page hide"><div class="panel"><small>MATCH CENTRE</small><h2>Analyses de matchs</h2><p class="muted">Fiches sportives et statistiques observées. Les cotes en direct nécessitent un fournisseur de données autorisé; aucune cote n’est inventée dans cette version.</p><form id="sportform"><label>Compétition</label><input id="competition" required maxlength="100" placeholder="Ligue / compétition"><label>Match / équipes</label><input id="teams" required maxlength="150" placeholder="Équipe A — Équipe B"><label>Date et heure (facultatif)</label><input id="matchdate" type="datetime-local"><label>Statistiques et notes</label><textarea id="notes" required maxlength="3000" placeholder="Forme récente, buts, tirs, possession, face-à-face…"></textarea><button>Enregistrer l’analyse</button><p id="sportmsg"></p></form></div><div class="panel"><h2>Fiches enregistrées</h2><div id="sportslist"></div></div></section><section id="games" class="page hide"><div class="notice">Aviator, JetX et CosmoX sont des jeux à résultats aléatoires. Les données passées ne prédisent pas les résultats futurs.</div><div class="panel"><h2>Observations historiques</h2><form id="gameform"><label>Jeu</label><select id="gamename"><option>Aviator</option><option>JetX</option><option>CosmoX</option><option>Autre</option></select><label>Multiplicateur observé (facultatif)</label><input id="multiplier" type="number" min=".01" step=".01" placeholder="Ex. 1.45"><label>Note</label><input id="gamenote" maxlength="500" placeholder="Note personnelle"><button>Enregistrer</button><p id="gamemsg"></p></form><div class="metrics"><article><small>Observations</small><strong id="total">0</strong></article><article><small>Moyenne</small><strong id="average">—</strong></article><article><small>Maximum</small><strong id="maximum">—</strong></article></div><div id="gameslist"></div></div></section><section id="community" class="page hide"><div class="panel"><h2>Publier une analyse</h2><form id="postform"><label>Titre</label><input id="title" required maxlength="120"><label>Contenu</label><textarea id="body" required maxlength="3000"></textarea><button>Publier</button><p id="postmsg"></p></form></div><div class="panel"><h2>Publications</h2><div id="posts"></div></div></section><section id="profile" class="page hide"><div class="panel"><small>COMPTE UTILISATEUR</small><h2>Mon profil</h2><p id="profileemail"></p><code id="profileid"></code></div></section></section><footer>StratX — Analyse. Stratégie. Performance.<small>Les statistiques passées ne garantissent pas les résultats futurs.</small></footer></main></body></html>
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0a0c10">
+<title>StratX Premium — Sports Intelligence</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script defer src="app.js"></script>
+</head>
+<body>
+<header><a class="logo" href="#" aria-label="StratX accueil">SX <span>StratX</span></a><span id="status">Initialisation…</span><button id="logout" class="hide secondary">Déconnexion</button></header>
+<main>
+<section id="auth" class="panel auth">
+  <small>SPORTS INTELLIGENCE</small><h1>Analyse. <em>Stratégie.</em><br>Performance.</h1>
+  <p class="muted">Connectez-vous à votre espace StratX.</p>
+  <label for="email">Adresse e-mail</label><input id="email" type="email" autocomplete="email" placeholder="vous@exemple.com" required>
+  <label for="password">Mot de passe</label><input id="password" type="password" autocomplete="current-password" minlength="6" placeholder="6 caractères minimum" required>
+  <div class="buttons"><button id="login">Connexion</button><button id="signup" class="secondary">Créer un compte</button></div>
+  <p id="authmsg" role="status" aria-live="polite"></p>
+</section>
+<section id="app" class="hide">
+  <div class="hero"><small>TABLEAU DE BORD</small><h1>Bienvenue sur <em>StratX</em></h1><p>Analysez les données. Comprenez les tendances. Prenez du recul.</p></div>
+  <nav>
+    <button data-page="home" class="active"><span>⌂</span><b>Accueil</b></button>
+    <button data-page="football"><span>⚽</span><b>Football en direct & à venir</b></button>
+    <button data-page="games"><span>▥</span><b>Observations de jeux</b></button>
+    <button data-page="community"><span>◉</span><b>Communauté</b></button>
+    <button data-page="profile"><span>♙</span><b>Mon profil</b></button>
+  </nav>
+  <section id="home" class="page">
+    <div class="metrics">
+      <article><small>Publications</small><strong id="countPosts">0</strong></article>
+      <article><small>Fiches football</small><strong id="countSports">0</strong></article>
+      <article><small>Observations historiques</small><strong id="countGames">0</strong></article>
+    </div>
+    <div class="panel"><div class="section-head"><div><small>VOTRE ESPACE</small><h2>Dernières analyses</h2></div><button id="refresh" class="secondary">Actualiser</button></div><div id="latest" class="empty">Chargement des données…</div></div>
+    <div class="panel"><small>APERÇU</small><h2>Centre football</h2><p class="muted">Consultez les matchs en cours, les rencontres à venir et les statistiques disponibles. Aucune cote ni aucun ticket de pari n’est proposé.</p><button data-goto="football">Ouvrir le centre football</button></div>
+  </section>
+  <section id="football" class="page hide">
+    <div class="panel"><small>MATCH CENTRE</small><h2>Football en direct & à venir</h2><p class="muted">Connectez une clé API de données football pour charger les rencontres et les statistiques. La clé est conservée uniquement dans ce navigateur. Ne collez jamais une clé secrète de service Supabase ici.</p>
+      <label for="footballKey">Clé API-Football (clé personnelle)</label><input id="footballKey" type="password" autocomplete="off" placeholder="Votre clé API-Football">
+      <div class="buttons"><button id="saveFootballKey">Enregistrer la clé sur cet appareil</button><button id="loadFixtures" class="secondary">Charger les matchs</button></div>
+      <p id="footballmsg" role="status" aria-live="polite"></p>
+    </div>
+    <div class="grid-two"><div class="panel"><div class="section-head"><h2>En direct</h2><span class="live-dot">● LIVE</span></div><div id="liveFixtures" class="empty">Chargez les matchs pour voir les rencontres en cours.</div></div>
+    <div class="panel"><div class="section-head"><h2>À venir / récents</h2><span class="muted">7 jours</span></div><div id="upcomingFixtures" class="empty">Les prochaines rencontres apparaîtront ici.</div></div></div>
+    <div class="panel"><h2>Fiches d'analyse personnelles</h2><p class="muted">Enregistrez vos notes de forme, buts, tirs ou confrontations directes.</p>
+      <form id="sportform"><label for="competition">Compétition</label><input id="competition" required maxlength="100" placeholder="Ligue / compétition"><label for="teams">Match / équipes</label><input id="teams" required maxlength="150" placeholder="Équipe A — Équipe B"><label for="matchdate">Date et heure</label><input id="matchdate" type="datetime-local"><label for="notes">Statistiques et notes</label><textarea id="notes" required maxlength="3000" placeholder="Forme récente, buts marqués/encaissés, tirs, face-à-face…"></textarea><button>Enregistrer l’analyse</button><p id="sportmsg" role="status"></p></form>
+    </div>
+    <div class="panel"><h2>Fiches enregistrées</h2><div id="sportslist" class="empty">Aucune fiche chargée.</div></div>
+  </section>
+  <section id="games" class="page hide">
+    <div class="notice"><strong>Information importante</strong><p>Aviator, JetX et CosmoX sont des jeux à résultats aléatoires. Les observations passées ne permettent pas de prévoir le prochain résultat. Cette section sert uniquement à conserver et consulter des observations historiques, sans signal ni recommandation de mise.</p></div>
+    <div class="panel"><small>JOURNAL D'OBSERVATION</small><h2>Observations historiques</h2>
+      <form id="gameform"><label for="gamename">Jeu</label><select id="gamename"><option>Aviator</option><option>JetX</option><option>CosmoX</option><option>Autre</option></select><label for="multiplier">Valeur observée (facultatif)</label><input id="multiplier" type="number" min=".01" step=".01" placeholder="Ex. 1,45"><label for="gamenote">Note</label><input id="gamenote" maxlength="500" placeholder="Observation personnelle"><button>Enregistrer l'observation</button><p id="gamemsg" role="status"></p></form>
+      <div class="metrics"><article><small>Observations</small><strong id="total">0</strong></article><article><small>Moyenne historique</small><strong id="average">—</strong></article><article><small>Maximum historique</small><strong id="maximum">—</strong></article></div><div id="gameslist" class="empty">Aucune observation pour le moment.</div>
+    </div>
+  </section>
+  <section id="community" class="page hide"><div class="panel"><h2>Publier une analyse</h2><form id="postform"><label for="title">Titre</label><input id="title" required maxlength="120"><label for="body">Contenu</label><textarea id="body" required maxlength="3000"></textarea><button>Publier</button><p id="postmsg" role="status"></p></form></div><div class="panel"><h2>Publications</h2><div id="posts" class="empty">Aucune publication chargée.</div></div></section>
+  <section id="profile" class="page hide"><div class="panel"><small>COMPTE UTILISATEUR</small><h2>Mon profil</h2><p id="profileemail"></p><code id="profileid"></code><p class="muted">Les données de compte sont gérées par Supabase.</p></div></section>
+</section>
+<footer>StratX — Analyse. Stratégie. Performance.<small>Les statistiques décrivent le passé et ne garantissent pas les résultats futurs.</small></footer>
+</main>
+</body></html>

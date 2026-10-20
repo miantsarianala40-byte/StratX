@@ -1,1 +1,44 @@
-create table if not exists public.analyses(id bigint generated always as identity primary key,user_id uuid not null references auth.users(id) on delete cascade,title text not null check(char_length(trim(title)) between 1 and 120),body text not null check(char_length(trim(body)) between 1 and 3000),created_at timestamptz not null default now());create table if not exists public.sports_analyses(id bigint generated always as identity primary key,user_id uuid not null references auth.users(id) on delete cascade,competition text not null,teams text not null,notes text not null,created_at timestamptz not null default now());create table if not exists public.game_observations(id bigint generated always as identity primary key,user_id uuid not null references auth.users(id) on delete cascade,game_name text not null check(game_name in ('Aviator','JetX','CosmoX','Autre')),multiplier numeric(12,2) check(multiplier is null or multiplier>0),note text,created_at timestamptz not null default now());alter table public.analyses enable row level security;alter table public.sports_analyses enable row level security;alter table public.game_observations enable row level security;grant select,insert on public.analyses,public.sports_analyses,public.game_observations to authenticated;grant usage,select on all sequences in schema public to authenticated;create policy "read analyses" on public.analyses for select to authenticated using(true);create policy "insert own analyses" on public.analyses for insert to authenticated with check(auth.uid()=user_id);create policy "read sports" on public.sports_analyses for select to authenticated using(true);create policy "insert own sports" on public.sports_analyses for insert to authenticated with check(auth.uid()=user_id);create policy "read own observations" on public.game_observations for select to authenticated using(auth.uid()=user_id);create policy "insert own observations" on public.game_observations for insert to authenticated with check(auth.uid()=user_id);
+-- StratX schema (idempotent: safe to run more than once)
+create table if not exists public.analyses (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null check(char_length(trim(title)) between 1 and 120),
+  body text not null check(char_length(trim(body)) between 1 and 3000),
+  created_at timestamptz not null default now()
+);
+create table if not exists public.sports_analyses (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  competition text not null check(char_length(trim(competition)) between 1 and 100),
+  teams text not null check(char_length(trim(teams)) between 1 and 150),
+  notes text not null check(char_length(trim(notes)) between 1 and 3000),
+  created_at timestamptz not null default now()
+);
+create table if not exists public.game_observations (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  game_name text not null check(game_name in ('Aviator','JetX','CosmoX','Autre')),
+  multiplier numeric(12,2) check(multiplier is null or multiplier > 0),
+  note text check(note is null or char_length(note) <= 500),
+  created_at timestamptz not null default now()
+);
+alter table public.analyses enable row level security;
+alter table public.sports_analyses enable row level security;
+alter table public.game_observations enable row level security;
+grant select, insert on public.analyses, public.sports_analyses, public.game_observations to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
+drop policy if exists "read analyses" on public.analyses;
+drop policy if exists "insert own analyses" on public.analyses;
+drop policy if exists "read sports" on public.sports_analyses;
+drop policy if exists "insert own sports" on public.sports_analyses;
+drop policy if exists "read own observations" on public.game_observations;
+drop policy if exists "insert own observations" on public.game_observations;
+
+-- Community and match notes are visible to signed-in users; only the author can insert as themselves.
+create policy "read analyses" on public.analyses for select to authenticated using (true);
+create policy "insert own analyses" on public.analyses for insert to authenticated with check (auth.uid() = user_id);
+create policy "read sports" on public.sports_analyses for select to authenticated using (true);
+create policy "insert own sports" on public.sports_analyses for insert to authenticated with check (auth.uid() = user_id);
+create policy "read own observations" on public.game_observations for select to authenticated using (auth.uid() = user_id);
+create policy "insert own observations" on public.game_observations for insert to authenticated with check (auth.uid() = user_id);
