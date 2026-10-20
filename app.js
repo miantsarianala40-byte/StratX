@@ -4,7 +4,7 @@
   const SUPABASE_KEY = 'sb_publishable_IFZGXyCPkt_eZFjaDdWOaA_LYZ1UdEg';
   const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
   const $ = id => document.getElementById(id);
-  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', games: [], sports: [], posts: [], profile: {} };
+  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {} };
   const gameInfo = {
     Aviator: { desc: 'Consignez les observations passées du jeu Aviator et consultez un résumé descriptif.', logo: '✈', cls: 'aviator-logo' },
     JetX: { desc: 'Un espace dédié pour garder un historique personnel des observations JetX.', logo: 'JX', cls: 'jetx-logo' },
@@ -85,10 +85,38 @@
       say('countPosts', posts.length); say('countSports', sports.length); say('countGames', games.length);
       say('sportsCount', `${sports.length} fiche${sports.length === 1 ? '' : 's'}`);
       renderList('sportslist', sports, r => ({ title: r.teams, body: `${r.competition || 'Compétition non précisée'}\n${r.notes || ''}`, date: r.match_date || r.created_at, eyebrow: 'FICHE FOOTBALL' }), 'Aucune rencontre enregistrée', 'Ajoutez une fiche de rencontre pour la retrouver ici.');
-      renderList('posts', posts, r => ({ title: r.title, body: r.body, date: r.created_at, eyebrow: 'PUBLICATION COMMUNAUTAIRE' }), 'Aucune publication', 'Soyez le premier à partager une analyse.');
+      renderCommunity();
       renderList('latest', [...posts.map(r => ({ title: r.title, body: r.body, created_at: r.created_at, kind: 'PUBLICATION' })), ...sports.map(r => ({ title: r.teams, body: r.competition, created_at: r.created_at, kind: 'FOOTBALL' })), ...games.map(r => ({ title: `${r.game_name}${r.multiplier == null ? '' : ` · ${Number(r.multiplier).toFixed(2)}x`}`, body: r.note || 'Observation historique', created_at: r.created_at, kind: 'OBSERVATION' }))].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5), r => ({ title: r.title, body: r.body, date: r.created_at, eyebrow: r.kind }), 'Votre espace est prêt', 'Vos publications et analyses apparaîtront ici.');
       renderGame(); setStatus('Connecté · synchronisé');
     } catch (error) { setStatus('Erreur de synchronisation', false); console.error('StratX refresh:', error); ['sportslist','posts','latest','gameslist'].forEach(id => { const el=$(id); if(el) el.textContent=friendlyError(error); }); }
+  }
+  const communityStoreKey = suffix => `stratx-community-${state.user?.id || 'guest'}-${suffix}`;
+  function readCommunityStore(suffix, fallback) { try { const value = JSON.parse(localStorage.getItem(communityStoreKey(suffix)) || 'null'); return value ?? fallback; } catch { return fallback; } }
+  function writeCommunityStore(suffix, value) { try { localStorage.setItem(communityStoreKey(suffix), JSON.stringify(value)); } catch {} }
+  function communityToast(text) { const el=$('communityToast'); if(!el) return; el.textContent=text; el.classList.add('show'); window.clearTimeout(communityToast._timer); communityToast._timer=window.setTimeout(()=>el.classList.remove('show'),2600); }
+  function renderCommunity() {
+    const list=$('posts'); if(!list) return;
+    state.communityLiked=new Set(readCommunityStore('liked',[])); state.communitySaved=new Set(readCommunityStore('saved',[])); state.communityComments=readCommunityStore('comments',{});
+    const query=(state.communityQuery||'').trim().toLocaleLowerCase('fr');
+    let rows=[...(state.posts||[])];
+    if(state.communityFilter==='mine') rows=rows.filter(r=>r.user_id===state.user?.id);
+    if(state.communityFilter==='saved') rows=rows.filter(r=>state.communitySaved.has(String(r.id)));
+    if(state.communitySort==='liked') rows=rows.filter(r=>state.communityLiked.has(String(r.id)));
+    if(query) rows=rows.filter(r=>`${r.title||''} ${r.body||''}`.toLocaleLowerCase('fr').includes(query));
+    rows.sort((a,b)=>state.communitySort==='oldest'?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at));
+    say('communityPostCount', state.posts.length); say('communityMineCount', state.posts.filter(r=>r.user_id===state.user?.id).length); say('communitySavedCount', state.communitySaved.size); say('savedFilterCount', state.communitySaved.size);
+    const name=state.user?.user_metadata?.display_name || state.user?.email?.split('@')[0] || 'Membre StratX'; say('communityComposerName',name); say('communityAvatar',initials(name));
+    list.replaceChildren();
+    if(!rows.length){const empty=document.createElement('div');empty.className='community-empty';const icon=document.createElement('span');icon.textContent=query?'⌕':'✦';const h=document.createElement('h3');h.textContent=query?'Aucun résultat':'Le fil attend votre première idée';const p=document.createElement('p');p.textContent=query?'Essayez un autre mot-clé ou changez le filtre.':state.communityFilter==='saved'?'Enregistrez une publication en favori pour la retrouver ici.':state.communityFilter==='mine'?'Vos publications apparaîtront ici après leur partage.':'Soyez le premier membre à lancer une discussion utile.';empty.append(icon,h,p);list.append(empty);return;}
+    rows.forEach(r=>{
+      const id=String(r.id), mine=r.user_id===state.user?.id, author=mine?(state.user?.user_metadata?.display_name||state.user?.email?.split('@')[0]||'Vous'):'Membre StratX';
+      const card=document.createElement('article');card.className='community-post-card';
+      const top=document.createElement('div');top.className='post-author-row';const avatar=document.createElement('div');avatar.className='post-avatar';avatar.textContent=initials(author);const meta=document.createElement('div');meta.className='post-author-meta';const nm=document.createElement('b');nm.textContent=author;const dt=document.createElement('small');dt.textContent=`${mine?'Votre publication':'Membre StratX'} · ${formatDate(r.created_at)}`;meta.append(nm,dt);const pill=document.createElement('span');pill.className='post-type-pill';pill.textContent=mine?'VOTRE POST':'DISCUSSION';top.append(avatar,meta,pill);
+      const title=document.createElement('h3');title.className='post-title';title.textContent=r.title||'Publication sans titre';const body=document.createElement('p');body.className='post-body';body.textContent=r.body||'';
+      const action=document.createElement('div');action.className='post-actions';const like=document.createElement('button');like.type='button';like.className='post-action'+(state.communityLiked.has(id)?' selected':'');like.innerHTML=`<span>♡</span> ${state.communityLiked.has(id)?'Aimé':'J’aime'}`;like.addEventListener('click',()=>{const set=new Set(readCommunityStore('liked',[]));set.has(id)?set.delete(id):set.add(id);writeCommunityStore('liked',[...set]);renderCommunity();});const commentBtn=document.createElement('button');commentBtn.type='button';commentBtn.className='post-action';commentBtn.innerHTML=`<span>▤</span> Commenter`;const save=document.createElement('button');save.type='button';save.className='post-action post-save'+(state.communitySaved.has(id)?' selected':'');save.innerHTML=`<span>${state.communitySaved.has(id)?'★':'☆'}</span> ${state.communitySaved.has(id)?'Enregistré':'Enregistrer'}`;save.addEventListener('click',()=>{const set=new Set(readCommunityStore('saved',[]));set.has(id)?set.delete(id):set.add(id);writeCommunityStore('saved',[...set]);renderCommunity();communityToast(set.has(id)?'Publication ajoutée aux favoris.':'Publication retirée des favoris.');});action.append(like,commentBtn,save);
+      const commentArea=document.createElement('div');commentArea.className='post-comment-area';const comments=(state.communityComments[id]||[]);const commentsHead=document.createElement('div');commentsHead.className='comments-heading';commentsHead.textContent=`Discussion locale · ${comments.length} commentaire${comments.length===1?'':'s'}`;commentArea.append(commentsHead);comments.slice(-4).forEach(c=>{const row=document.createElement('div');row.className='local-comment';const ca=document.createElement('span');ca.className='comment-avatar';ca.textContent=initials(c.name);const wrap=document.createElement('div');const cb=document.createElement('b');cb.textContent=c.name;const cp=document.createElement('p');cp.textContent=c.text;wrap.append(cb,cp);row.append(ca,wrap);commentArea.append(row);});const form=document.createElement('form');form.className='comment-form';const input=document.createElement('input');input.maxLength=500;input.required=true;input.placeholder='Écrire un commentaire…';input.setAttribute('aria-label','Écrire un commentaire');const send=document.createElement('button');send.type='submit';send.textContent='Envoyer';form.append(input,send);form.addEventListener('submit',e=>{e.preventDefault();const text=input.value.trim();if(!text)return;const all=readCommunityStore('comments',{});all[id]=[...(all[id]||[]),{name:state.user?.user_metadata?.display_name||state.user?.email?.split('@')[0]||'Membre',text,at:new Date().toISOString()}].slice(-30);writeCommunityStore('comments',all);state.communityComments=all;renderCommunity();communityToast('Commentaire enregistré sur cet appareil.');});commentBtn.addEventListener('click',()=>{commentArea.classList.toggle('expanded');if(commentArea.classList.contains('expanded'))input.focus();});
+      card.append(top,title,body,action,commentArea);list.append(card);
+    });
   }
   function renderGame() {
     const name = state.activeGame; const info = gameInfo[name]; if (!info) return;
@@ -145,10 +173,17 @@
       catch(error) { msg('gamemsg',friendlyError(error),true); } finally { if(btn) btn.disabled=false; }
     });
     $('postform').addEventListener('submit', async e => {
-      e.preventDefault(); if (!state.user) return; const btn=e.submitter; if(btn) btn.disabled=true;
-      try { const { error } = await db.from('analyses').insert({ user_id: state.user.id, title: $('title').value.trim(), body: $('body').value.trim() }); if(error) throw error; e.target.reset(); msg('postmsg','Publication enregistrée.'); await refresh(); }
+      e.preventDefault(); if (!state.user) { msg('postmsg','Connectez-vous pour publier.',true); return; } const btn=e.submitter; if(btn) btn.disabled=true;
+      const title=$('title').value.trim(), body=$('body').value.trim(); if(!title || !body){msg('postmsg','Le titre et le message sont obligatoires.',true);if(btn)btn.disabled=false;return;}
+      try { const { error } = await db.from('analyses').insert({ user_id: state.user.id, title, body }); if(error) throw error; e.target.reset(); say('bodyCount','0'); msg('postmsg','Votre publication est en ligne.'); await refresh(); communityToast('Publication partagée avec la communauté.'); $('communityComposer')?.scrollIntoView({behavior:'smooth',block:'start'}); }
       catch(error) { msg('postmsg',friendlyError(error),true); } finally { if(btn) btn.disabled=false; }
     });
+    $('communitySearch')?.addEventListener('input', e=>{state.communityQuery=e.target.value;renderCommunity();});
+    $('communitySort')?.addEventListener('change', e=>{state.communitySort=e.target.value;renderCommunity();});
+    document.querySelectorAll('[data-filter]').forEach(btn=>btn.addEventListener('click',()=>{state.communityFilter=btn.dataset.filter;document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('active',b===btn));renderCommunity();}));
+    $('communityRefresh')?.addEventListener('click',refresh);
+    $('jumpComposer')?.addEventListener('click',()=>$('communityComposer')?.scrollIntoView({behavior:'smooth',block:'start'}));
+    $('body')?.addEventListener('input',e=>say('bodyCount',String(e.target.value.length)));
     $('profileform').addEventListener('submit', async e => {
       e.preventDefault(); if (!db || !state.user) return; const display_name=$('displayName').value.trim(); const bio=$('profileBio').value.trim(); const btn=e.submitter; if(btn) btn.disabled=true;
       try { const { data, error } = await db.auth.updateUser({ data: { display_name: display_name || state.user.email?.split('@')[0] || 'Analyste', bio } }); if(error) throw error; state.user=data.user; $('displayName').dataset.loaded='yes'; authUI(); msg('profilemsg','Votre profil a été mis à jour.'); }
