@@ -1,29 +1,30 @@
-STRATX PREMIUM — VERSION CORRIGÉE
+STRATX PREMIUM — VERSION AMÉLIORÉE
+=================================
 
-Contenu
-- index.html : interface premium
-- style.css : design responsive noir/or
-- app.js : authentification Supabase, analyses, observations historiques et chargement de rencontres football via API-Football
-- schema.sql : tables et politiques RLS Supabase (réexécutable)
+CONTENU
+- index.html : interface responsive premium (accueil, football, observations, communauté, profil).
+- style.css : design sombre, accents dorés, cartes, logos de jeux et adaptation mobile.
+- app.js : authentification Supabase, session, profil, enregistrements, statistiques descriptives et affichage.
+- schema.sql : tables et politiques RLS Supabase, avec colonnes de date et policies ré-exécutables.
 
-INSTALLATION
-1. Ouvrez votre projet Supabase et allez dans SQL Editor.
-2. Copiez tout le contenu de schema.sql, exécutez-le.
-3. Dans Authentication > URL Configuration, configurez le Site URL avec l'URL HTTPS de votre site et ajoutez cette URL aux Redirect URLs.
-4. Hébergez index.html, style.css et app.js sur un hébergement HTTPS.
-5. Testez « Créer un compte ». Si la confirmation d'e-mail est activée, ouvrez l'e-mail reçu avant de vous connecter.
+MISE EN PLACE
+1. Décompressez ce ZIP.
+2. Dans Supabase, ouvrez SQL Editor et exécutez schema.sql.
+3. Dans Authentication > URL Configuration, configurez Site URL et les Redirect URLs vers l'adresse HTTPS où sera hébergée l'application.
+4. Vérifiez Authentication > Providers > Email. Si la confirmation par e-mail est activée, le nouvel utilisateur doit confirmer son e-mail avant de se connecter.
+5. Hébergez index.html, style.css et app.js ensemble sur un hébergement statique HTTPS.
+6. Ouvrez le site et créez un compte. Les données sont sauvegardées dans Supabase.
 
-FOOTBALL
-- Créez un compte auprès d'un fournisseur d'API football et utilisez votre clé personnelle dans la section « Football en direct & à venir ».
-- La clé est conservée dans localStorage de ce navigateur; elle n'est pas envoyée à Supabase.
-- Ce client interroge https://v3.football.api-sports.io/fixtures. Les limites de l'offre du fournisseur s'appliquent. Si le navigateur bloque les requêtes CORS, utilisez un backend/proxy HTTPS au lieu d'exposer la clé.
-- Cette version affiche les fixtures, scores et statuts seulement. Elle ne contient ni cotes ni tickets de pari.
+FONCTIONS DISPONIBLES
+- Connexion, création de compte, déconnexion et demande de réinitialisation du mot de passe par e-mail.
+- Accueil premium avec métriques et activité récente.
+- Fiches de rencontres de football ajoutées par l'utilisateur, avec compétition, équipes, date et notes statistiques.
+- Trois espaces d'observation séparés : Aviator, JetX et CosmoX. Chaque espace affiche uniquement ses entrées et calcule une moyenne/maximale descriptives des valeurs enregistrées.
+- Publications communautaires.
+- Profil modifiable (nom affiché et présentation) enregistré dans les métadonnées de Supabase Auth.
 
-SUPABASE / SÉCURITÉ
-- La clé intégrée est une clé publishable, jamais une clé service_role.
-- N'exposez jamais la clé service_role dans le navigateur.
-- Les politiques RLS permettent aux utilisateurs connectés de lire les publications et fiches de match, mais chacun ne peut insérer que ses propres données.
-- Les observations Aviator/JetX/CosmoX sont un journal historique uniquement. Les résultats passés ne prédisent pas les résultats futurs.
-
-LIMITES
-Le code a été vérifié statiquement, mais il n'a pas été déployé ni testé en direct contre votre projet Supabase ou votre clé fournisseur. Les résultats football nécessitent une clé API valide et une connexion Internet.
+LIMITES IMPORTANTES
+- L'intégration Supabase utilise l'URL et la clé publique du projet configurées dans app.js. Une clé publique/publishable peut être utilisée dans le navigateur seulement si les politiques RLS sont correctement configurées. Ne placez jamais de clé service_role dans ce fichier.
+- Cette version n'intègre pas automatiquement une API externe de résultats football : les fiches de rencontres sont ajoutées manuellement. Aucun score, match en direct ou statistique externe n'est inventé.
+- Les observations des jeux sont des historiques descriptifs, pas des prédictions du prochain résultat. Les valeurs passées ne garantissent pas les résultats futurs.
+- La connexion au projet Supabase et les e-mails d'authentification doivent être testés dans votre propre environnement après configuration de l'hébergement.
