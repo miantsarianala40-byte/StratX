@@ -140,36 +140,71 @@
     say('gameTotal', rows.length); say('gameAverage', vals.length ? `${(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2)}x` : '—'); say('gameMaximum', vals.length ? `${Math.max(...vals).toFixed(2)}x` : '—'); say('gameCountChip', `${rows.length} entrée${rows.length===1?'':'s'}`);
     renderList('gameslist', rows, r => ({ title: r.multiplier == null ? 'Observation sans valeur numérique' : `Valeur observée : ${Number(r.multiplier).toFixed(2)}x`, body: r.note || 'Aucune note ajoutée.', date: r.observed_at || r.created_at, eyebrow: name.toUpperCase() }), `Aucune observation ${name}`, `Les entrées que vous ajouterez à ${name} seront affichées ici.`);
   }
-  function toggleSignupFields(show) { const wrap=$('signupNameWrap'); if(wrap) wrap.classList.toggle('signup-mode', !!show); if($('signupName')) $('signupName').required=!!show; }
+  function toggleSignupFields(show) {
+    const wrap = $('signupNameWrap');
+    if (wrap) wrap.classList.toggle('signup-mode', !!show);
+    if ($('signupName')) $('signupName').required = !!show;
+    const signupButton = $('signup');
+    if (signupButton) signupButton.innerHTML = show ? 'Valider la création <span>→</span>' : 'Créer mon compte';
+    if ($('password')) $('password').autocomplete = show ? 'new-password' : 'current-password';
+    if (show) $('signupName')?.focus();
+  }
   async function runAuth(action) {
     if (!db) { msg('authmsg', 'Le service Supabase ne se charge pas. Vérifiez votre connexion et les clés de configuration.', true); return; }
-    const email = $('email').value.trim(); const password = $('password').value;
-    if (!email || !email.includes('@')) { msg('authmsg', 'Saisissez une adresse e-mail valide.', true); $('email').focus(); return; }
-    if (action !== 'reset' && password.length < 6) { msg('authmsg', 'Le mot de passe doit contenir au moins 6 caractères.', true); $('password').focus(); return; }
-    ['login','signup','resetPassword'].forEach(id => { const b=$(id); if(b) b.disabled = true; });
+    const email = $('email')?.value.trim() || '';
+    const password = $('password')?.value || '';
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg('authmsg', 'Saisissez une adresse e-mail valide.', true); $('email')?.focus(); return; }
+    if (action !== 'reset' && password.length < 6) { msg('authmsg', 'Le mot de passe doit contenir au moins 6 caractères.', true); $('password')?.focus(); return; }
+    if (action === 'signup') {
+      const displayName = $('signupName')?.value.trim() || '';
+      if (displayName.length < 2) { msg('authmsg', 'Saisissez le nom qui sera affiché dans StratX.', true); $('signupName')?.focus(); return; }
+    }
+    ['login','signup','resetPassword'].forEach(id => { const b = $(id); if (b) b.disabled = true; });
     try {
       if (action === 'login') {
-        const { error } = await db.auth.signInWithPassword({ email, password }); if (error) throw error; msg('authmsg', 'Connexion réussie.');
+        const { error } = await db.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        msg('authmsg', 'Connexion réussie. Ouverture de votre espace…');
       } else if (action === 'signup') {
-        const displayName=$('signupName')?.value.trim() || ''; if(displayName.length<2){msg('authmsg','Saisissez le nom qui sera affiché dans StratX.',true);$('signupName')?.focus();return;} const { data, error } = await db.auth.signUp({ email, password, options: { data: { display_name: displayName } } }); if (error) throw error;
-        msg('authmsg', data.session ? 'Compte créé et connecté.' : 'Compte créé. Consultez votre e-mail pour confirmer votre adresse avant la connexion.');
+        const displayName = $('signupName').value.trim();
+        const redirectUrl = window.location.href.split('#')[0];
+        const { data, error } = await db.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: redirectUrl, data: { display_name: displayName } }
+        });
+        if (error) throw error;
+        if (data.session) {
+          msg('authmsg', 'Compte créé et connecté. Ouverture de votre espace…');
+        } else {
+          msg('authmsg', 'Compte créé. Ouvrez l’e-mail de confirmation envoyé par Supabase, confirmez votre adresse, puis revenez ici pour vous connecter.');
+        }
       } else {
-        const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.href.split('#')[0] }); if (error) throw error;
+        const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.href.split('#')[0] });
+        if (error) throw error;
         msg('authmsg', 'Si cette adresse correspond à un compte, un e-mail de réinitialisation sera envoyé.');
       }
     } catch (error) { msg('authmsg', friendlyError(error), true); }
-    finally { ['login','signup','resetPassword'].forEach(id => { const b=$(id); if(b) b.disabled = false; }); }
+    finally { ['login','signup','resetPassword'].forEach(id => { const b = $(id); if (b) b.disabled = false; }); }
   }
   async function signOut() { if (!db) return; const { error } = await db.auth.signOut(); if (error) msg('profilemsg', friendlyError(error), true); }
   function bind() {
     document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
     document.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.goto)));
     document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; renderGame(); }));
-    $('login').addEventListener('click', () => runAuth('login'));
-    $('signup').addEventListener('click', () => { if(!$('signupNameWrap')?.classList.contains('signup-mode')) { toggleSignupFields(true); msg('authmsg','Complétez votre nom affiché, puis appuyez de nouveau sur « Créer mon compte ».'); $('signupName')?.focus(); return; } runAuth('signup'); });
-    $('login').addEventListener('click', () => toggleSignupFields(false));
-    $('resetPassword').addEventListener('click', () => runAuth('reset'));
-    $('password').addEventListener('keydown', e => { if (e.key === 'Enter') runAuth('login'); });
+    $('login').addEventListener('click', () => { toggleSignupFields(false); runAuth('login'); });
+    $('signup').addEventListener('click', () => {
+      if (!$('signupNameWrap')?.classList.contains('signup-mode')) {
+        toggleSignupFields(true);
+        msg('authmsg', 'Renseignez votre nom affiché, votre e-mail et un mot de passe, puis validez la création du compte.');
+        return;
+      }
+      runAuth('signup');
+    });
+    $('resetPassword').addEventListener('click', () => { toggleSignupFields(false); runAuth('reset'); });
+    $('password').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); runAuth($('signupNameWrap')?.classList.contains('signup-mode') ? 'signup' : 'login'); }
+    });
     $('togglePassword').addEventListener('click', () => { const p=$('password'); p.type = p.type === 'password' ? 'text' : 'password'; });
     $('logout').addEventListener('click', signOut); $('profileLogout').addEventListener('click', signOut); $('refresh').addEventListener('click', refresh);
     $('sportform').addEventListener('submit', async e => {
