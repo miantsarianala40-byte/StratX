@@ -201,7 +201,7 @@
         msg('authmsg', 'Connexion réussie. Bienvenue sur StratX.');
       } else if (action === 'signup') {
         const displayName = $('signupName').value.trim();
-        const redirectUrl = window.location.href.split('#')[0];
+        const redirectUrl = window.location.origin + '/connexion';
         const { data, error } = await db.auth.signUp({
           email,
           password,
@@ -215,7 +215,7 @@
           msg('authmsg', 'Compte créé. Ouvrez l’e-mail de confirmation envoyé par Supabase, confirmez votre adresse, puis revenez ici pour vous connecter.');
         }
       } else {
-        const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.href.split('#')[0] });
+        const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/mot-de-passe-oublie' });
         if (error) throw error;
         msg('authmsg', 'Si cette adresse correspond à un compte, un e-mail de réinitialisation sera envoyé.');
       }
@@ -228,16 +228,17 @@
     document.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.goto)));
     document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.showGameHistory = false; document.querySelectorAll('.game-tab').forEach(tab => tab.classList.toggle('active', tab === btn)); history.pushState({}, '', '/' + btn.dataset.game.toLowerCase()); renderGame(); }));
     $('toggleGameHistory')?.addEventListener('click', () => { state.showGameHistory = !state.showGameHistory; renderGame(); });
-    $('login').addEventListener('click', () => { toggleSignupFields(false); runAuth('login'); });
+    $('login').addEventListener('click', () => { history.pushState({}, '', '/connexion'); toggleSignupFields(false); runAuth('login'); });
     $('signup').addEventListener('click', () => {
       if (!$('signupNameWrap')?.classList.contains('signup-mode')) {
+        history.pushState({}, '', '/inscription');
         toggleSignupFields(true);
         msg('authmsg', 'Renseignez votre nom affiché, votre e-mail et un mot de passe, puis validez la création du compte.');
         return;
       }
       runAuth('signup');
     });
-    $('resetPassword').addEventListener('click', () => { toggleSignupFields(false); runAuth('reset'); });
+    $('resetPassword').addEventListener('click', () => { history.pushState({}, '', '/mot-de-passe-oublie'); toggleSignupFields(false); runAuth('reset'); });
     $('password').addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); runAuth($('signupNameWrap')?.classList.contains('signup-mode') ? 'signup' : 'login'); }
     });
@@ -279,6 +280,7 @@
   function initDate() { say('todayDate', new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})); const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); const local=now.toISOString().slice(0,16); if($('observedAt')) $('observedAt').value=local; }
   async function init() {
     bind(); initDate();
+    window.addEventListener('popstate', syncRouteFromUrl);
     window.addEventListener('popstate', syncRouteFromUrl);
     if (!db) { setStatus('Supabase indisponible',false); msg('authmsg','Impossible de charger Supabase. Vérifiez la connexion Internet ou la configuration de la bibliothèque.',true); return; }
     try {
