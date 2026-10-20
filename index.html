@@ -4,30 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#080a0d">
-  <meta name="description" content="StratX — Analyses sportives, statistiques et communauté.">
-  <title>StratX | Analyse. Stratégie. Performance.</title>
+  <meta name="description" content="StratX — analyses sportives, statistiques et communauté.">
+  <title>StratX | Accueil</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#" aria-label="StratX accueil">
-      <span class="brand-icon">SX</span>
-      <span>Strat<span class="gold">X</span></span>
-    </a>
-    <span id="connection" class="status">Connexion...</span>
+    <a class="brand" href="#" id="brandHome"><span class="brand-icon">SX</span><span>Strat<span class="gold">X</span></span></a>
+    <div class="top-actions">
+      <span id="connection" class="status">Connexion...</span>
+      <button id="logoutBtn" class="secondary small hidden" type="button">Déconnexion</button>
+    </div>
   </header>
+
   <main class="container">
-    <section class="hero">
+    <section id="authView" class="panel auth-panel">
       <p class="eyebrow">SPORTS INTELLIGENCE</p>
-      <h1>Analyse.<br><span class="gold">Stratégie. Performance.</span></h1>
-      <p>Les statistiques et les analyses au cœur du jeu.</p>
-      <div class="hero-tags"><span>Analyses</span><span>Statistiques</span><span>Communauté</span></div>
-    </section>
-    <section class="panel" id="authPanel">
-      <h2>Votre espace</h2>
-      <p class="muted" id="authIntro">Connectez-vous ou créez votre compte StratX.</p>
+      <h1>Bienvenue sur <span class="gold">StratX</span></h1>
+      <p class="muted">Connectez-vous pour accéder à votre espace d'analyses et à la communauté.</p>
       <form id="authForm">
         <label for="email">Adresse e-mail</label>
         <input id="email" type="email" autocomplete="email" placeholder="vous@exemple.com" required>
@@ -38,29 +34,70 @@
           <button type="button" id="signupBtn" class="secondary">Créer un compte</button>
         </div>
       </form>
-      <div id="accountInfo" class="hidden">
-        <p>Connecté avec :</p><strong id="userEmail"></strong>
-        <button id="logoutBtn" class="secondary" type="button">Déconnexion</button>
-      </div>
       <p id="authMessage" class="message" role="status"></p>
+      <p class="tiny muted">Les analyses sont informatives et ne garantissent aucun résultat.</p>
     </section>
-    <section class="panel">
-      <div class="section-heading">
-        <div><p class="eyebrow">SPORTS & DONNÉES</p><h2>Analyses récentes</h2></div>
-        <button id="refreshBtn" class="secondary" type="button">Actualiser</button>
-      </div>
-      <p class="muted">Partagez des observations et des analyses documentées.</p>
-      <form id="postForm" class="hidden">
-        <label for="postTitle">Titre</label>
-        <input id="postTitle" maxlength="120" required placeholder="Ex. Analyse du match">
-        <label for="postBody">Contenu</label>
-        <textarea id="postBody" maxlength="3000" rows="4" required placeholder="Présentez vos observations et statistiques..."></textarea>
-        <button id="publishBtn" type="submit">Publier l'analyse</button>
-        <p id="postMessage" class="message" role="status"></p>
-      </form>
-      <div id="posts" class="posts" aria-live="polite"><p class="muted">Chargement des publications...</p></div>
+
+    <section id="homeView" class="hidden">
+      <section class="hero">
+        <p class="eyebrow">SPORTS INTELLIGENCE</p>
+        <h1>Analyse.<br><span class="gold">Stratégie. Performance.</span></h1>
+        <p>Bienvenue, <strong id="welcomeEmail">membre StratX</strong>.</p>
+        <p class="muted">Consultez les analyses, partagez vos observations et échangez avec la communauté.</p>
+      </section>
+
+      <nav class="nav-tabs" aria-label="Navigation principale">
+        <button class="nav-tab active" data-view="homeSection">Accueil</button>
+        <button class="nav-tab" data-view="analysesSection">Analyses</button>
+        <button class="nav-tab" data-view="profileSection">Mon profil</button>
+      </nav>
+
+      <section id="homeSection" class="view-section">
+        <div class="stat-grid">
+          <article class="stat-card"><span class="stat-label">Analyses disponibles</span><strong id="analysisCount">—</strong></article>
+          <article class="stat-card"><span class="stat-label">Votre compte</span><strong class="stat-word">Actif</strong></article>
+        </div>
+        <section class="panel">
+          <div class="section-heading">
+            <div><p class="eyebrow">COMMUNAUTÉ</p><h2>Dernières analyses</h2></div>
+            <button class="secondary small" id="homeRefresh" type="button">Actualiser</button>
+          </div>
+          <div id="homePosts" class="posts"><p class="muted">Chargement...</p></div>
+        </section>
+        <section class="feature-grid">
+          <article class="feature-card"><span>01</span><h3>Analyses sportives</h3><p>Partagez des observations fondées sur des statistiques.</p></article>
+          <article class="feature-card"><span>02</span><h3>Communauté</h3><p>Apprenez et échangez dans un espace respectueux.</p></article>
+          <article class="feature-card"><span>03</span><h3>Transparence</h3><p>Les pronostics restent incertains : aucun gain n'est garanti.</p></article>
+        </section>
+      </section>
+
+      <section id="analysesSection" class="view-section hidden">
+        <section class="panel">
+          <p class="eyebrow">PARTAGE</p><h2>Publier une analyse</h2>
+          <form id="postForm">
+            <label for="postTitle">Titre</label>
+            <input id="postTitle" maxlength="120" required placeholder="Ex. Analyse du match">
+            <label for="postBody">Votre analyse</label>
+            <textarea id="postBody" maxlength="3000" rows="4" required placeholder="Présentez vos observations et statistiques..."></textarea>
+            <button id="publishBtn" type="submit">Publier l'analyse</button>
+            <p id="postMessage" class="message" role="status"></p>
+          </form>
+        </section>
+        <section class="panel"><div class="section-heading"><h2>Toutes les analyses</h2><button id="analysisRefresh" class="secondary small" type="button">Actualiser</button></div><div id="allPosts" class="posts"><p class="muted">Chargement...</p></div></section>
+      </section>
+
+      <section id="profileSection" class="view-section hidden">
+        <section class="panel">
+          <p class="eyebrow">ESPACE PERSONNEL</p><h2>Mon profil</h2>
+          <div class="profile-row"><span class="muted">E-mail</span><strong id="profileEmail"></strong></div>
+          <div class="profile-row"><span class="muted">Identifiant utilisateur</span><code id="profileId"></code></div>
+          <div class="profile-row"><span class="muted">Statut</span><strong class="success">Connecté</strong></div>
+          <button id="profileLogout" type="button" class="secondary">Déconnexion</button>
+        </section>
+      </section>
     </section>
-    <footer><strong>StratX</strong><p>Analyse. Stratégie. Performance.</p><p class="muted">Les analyses ne garantissent aucun résultat.</p></footer>
+
+    <footer><strong>StratX</strong><p>Analyse. Stratégie. Performance.</p><p class="muted tiny">Plateforme communautaire d'analyse. Pas de garantie de résultat.</p></footer>
   </main>
 </body>
 </html>
