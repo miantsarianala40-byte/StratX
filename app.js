@@ -4,7 +4,7 @@
   const SUPABASE_KEY = 'sb_publishable_IFZGXyCPkt_eZFjaDdWOaA_LYZ1UdEg';
   const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
   const $ = id => document.getElementById(id);
-  const state = { visitorRows: [], visitorPage: 0, currentPage: 'home', activeGame: 'Aviator', gameSection: 'overview', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
+  const state = { visitorRows: [], visitorPage: 0, visitorPromise: null, currentPage: 'home', activeGame: 'Aviator', gameSection: 'overview', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
   const gameInfo = {
     Aviator: { desc: 'Consignez les observations passées du jeu Aviator et consultez un résumé descriptif.', logo: '✈', cls: 'aviator-logo' },
     JetX: { desc: 'Un espace dédié pour garder un historique personnel des observations JetX.', logo: 'JX', cls: 'jetx-logo' },
@@ -31,7 +31,6 @@
     const logged = !!state.user;
     $('auth')?.classList.toggle('hide', logged);
     $('authVisits')?.classList.toggle('hide', logged);
-    $('auth')?.classList.toggle('hide', logged);
     $('app')?.classList.toggle('hide', !logged);
     $('logout')?.classList.toggle('hide', !logged);
     if (!logged) return;
@@ -412,7 +411,12 @@
     if ($('visitNext')) $('visitNext').disabled=state.visitorPage>=pages-1;
     say('visitCount', total.toLocaleString('fr-FR')); say('visitorButtonCount', `(${total})`);
   }
-  async function trackPublicVisit() {
+  function trackPublicVisit() {
+    if (state.visitorPromise) return state.visitorPromise;
+    state.visitorPromise = trackPublicVisitOnce().finally(() => { state.visitorPromise = null; });
+    return state.visitorPromise;
+  }
+  async function trackPublicVisitOnce() {
     const tableBody = $('recentVisits'); const notice = $('visitNotice');
     if (!db) { if (tableBody) { tableBody.replaceChildren(); const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=4;td.className='visit-status';td.textContent='Compteur indisponible : vérifiez Supabase.';tr.append(td);tableBody.append(tr);} return; }
     try {
@@ -432,7 +436,14 @@
       if (notice) notice.textContent = 'Ny marika dia vinavinaina avy amin’ny navigateur. Tsy aseho ny anarana, e-mail na IP.';
     } catch (error) {
       say('visitCount','—'); say('visitorButtonCount','');
-      if (tableBody) { tableBody.replaceChildren(); const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=4;td.className='visit-status';td.textContent='Tsy mandeha ny compteur. Alefaso aloha ny SQL ao amin’ny schema.sql, dia avereno ny pejy.';tr.append(td);tableBody.append(tr); }
+      const errorText='Tsy mandeha ny compteur. Alefaso aloha ny SQL ao amin’ny schema.sql, dia avereno ny pejy.';
+      for (const body of [tableBody, $('recentVisitsPreview')]) {
+        if (!body) continue;
+        body.replaceChildren();
+        const tr=document.createElement('tr'),td=document.createElement('td');
+        td.colSpan=4;td.className='visit-status';td.textContent=errorText;tr.append(td);body.append(tr);
+      }
+      say('previewVisitCount','—'); say('previewCountText','—');
       if (notice) notice.textContent='Jereo ny configuration Supabase sy ny policies amin’ny public_page_visits.';
       console.warn('StratX visit counter:', error?.message || error);
     }
