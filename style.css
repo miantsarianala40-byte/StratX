@@ -58,3 +58,12 @@ button:disabled{cursor:not-allowed!important;opacity:.48;filter:saturate(.5)}
 .visitors-standalone .visitor-table-scroll{max-height:none;overflow:auto;}
 .visitors-standalone .visitor-table{min-width:640px;}
 @media(max-width:620px){.visitor-dashboard.visitors-standalone{margin:0 auto 22px;padding:14px;min-height:calc(100vh - 120px)}}
+
+
+/* Requested behavior: show five recent visitors and open the full list separately. */
+.visitor-preview{margin-top:22px}
+.visitor-preview .visitor-table-foot{align-items:center}
+.visitor-preview #openVisitors{white-space:nowrap}
+.visitors-standalone{display:block}
+.visitors-standalone.hide{display:none!important}
+@media(max-width:620px){.visitor-preview .visitor-table-foot{align-items:stretch}.visitor-preview #openVisitors{width:100%}}

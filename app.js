@@ -56,11 +56,11 @@
     // Canonicalise malformed paths such as /aviator/resultats/"?" to a known route.
     let path = window.location.pathname;
     try { path = decodeURIComponent(path); } catch (_) {}
-    path = path.replace(/[\"'<>]/g, '').replace(/\/+$/, '') || '/';
+    path = path.replace(/[?\"'<>]/g, '').replace(/\/+$/, '') || '/';
     const parts = path.split('/').filter(Boolean);
     if (parts.length >= 2 && gameSlug[(parts[0] || '').toLowerCase()] && gameRouteSections.has((parts[1] || '').toLowerCase())) {
       const canonical = `/${(parts[0] || '').toLowerCase()}/${(parts[1] || '').toLowerCase()}`;
-      if (window.location.pathname !== canonical) history.replaceState({}, '', canonical);
+      if (window.location.href !== new URL(canonical, window.location.origin).href) history.replaceState({}, '', canonical);
       path = canonical;
     }
     const first = (parts[0] || '').toLowerCase();
@@ -85,6 +85,7 @@
       $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
       const visitorsOnly = route.page === 'visitors';
       $('auth')?.classList.toggle('hide', visitorsOnly);
+      $('visitorPreview')?.classList.toggle('hide', visitorsOnly);
       $('authVisits')?.classList.remove('hide');
       $('authVisits')?.classList.toggle('visitors-standalone', visitorsOnly);
       if (route.page === 'auth') { if (route.authMode === 'signup') toggleSignupFields(true); else toggleSignupFields(false); }
@@ -96,7 +97,7 @@
       $('authVisits')?.classList.remove('hide'); $('authVisits')?.classList.add('visitors-standalone');
       trackPublicVisit(); return;
     }
-    $('auth')?.classList.add('hide'); $('authVisits')?.classList.add('hide'); $('authVisits')?.classList.remove('visitors-standalone'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
+    $('auth')?.classList.add('hide'); $('authVisits')?.classList.add('hide'); $('authVisits')?.classList.remove('visitors-standalone'); $('visitorPreview')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
     if (route.page === 'auth') { history.replaceState({}, '', '/accueil'); return showPage('home', false); }
     if (route.game) {
       state.activeGame = route.game;
@@ -273,8 +274,8 @@
   }
   async function signOut() { if (!db) return; const { error } = await db.auth.signOut(); if (error) msg('profilemsg', friendlyError(error), true); }
   function bind() {
-    $('openVisitors')?.addEventListener('click', async () => { $('auth')?.classList.add('hide'); $('authVisits')?.classList.remove('hide'); $('authVisits')?.classList.add('visitors-standalone'); history.pushState({}, '', '/visiteurs'); await trackPublicVisit(); window.scrollTo({top:0,behavior:'smooth'}); });
-    $('backToLogin')?.addEventListener('click', () => { $('authVisits')?.classList.remove('visitors-standalone'); $('authVisits')?.classList.remove('hide'); $('auth')?.classList.remove('hide'); history.pushState({}, '', '/connexion'); window.scrollTo({top:0,behavior:'smooth'}); });
+    $('openVisitors')?.addEventListener('click', async () => { $('auth')?.classList.add('hide'); $('visitorPreview')?.classList.add('hide'); $('authVisits')?.classList.remove('hide'); $('authVisits')?.classList.add('visitors-standalone'); history.pushState({}, '', '/visiteurs'); await trackPublicVisit(); window.scrollTo({top:0,behavior:'smooth'}); });
+    $('backToLogin')?.addEventListener('click', () => { $('authVisits')?.classList.add('hide'); $('authVisits')?.classList.remove('visitors-standalone'); $('auth')?.classList.remove('hide'); $('visitorPreview')?.classList.remove('hide'); history.pushState({}, '', '/connexion'); window.scrollTo({top:0,behavior:'smooth'}); });
     $('visitPrev')?.addEventListener('click', () => { state.visitorPage=Math.max(0,state.visitorPage-1); renderVisitorPage(); });
     $('visitNext')?.addEventListener('click', () => { const max=Math.max(0,Math.ceil(state.visitorRows.length/25)-1); state.visitorPage=Math.min(max,state.visitorPage+1); renderVisitorPage(); });
     document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
@@ -375,17 +376,16 @@
       return null;
     }
   }
-  function renderVisitorPage() {
-    const body = $('recentVisits'); if (!body) return;
-    const pageSize = 25, total = state.visitorRows.length;
-    const pages = Math.max(1, Math.ceil(total/pageSize));
-    state.visitorPage = Math.min(state.visitorPage, pages-1);
-    const rows = state.visitorRows.slice(state.visitorPage*pageSize, (state.visitorPage+1)*pageSize);
+  function buildVisitorRows(body, rows, startIndex = 0) {
+    if (!body) return;
     body.replaceChildren();
-    if (!rows.length) { const tr=document.createElement('tr'), td=document.createElement('td'); td.colSpan=4; td.className='visit-status'; td.textContent='Mbola tsy misy mpitsidika voarakitra.'; tr.append(td); body.append(tr); }
+    if (!rows.length) {
+      const tr=document.createElement('tr'), td=document.createElement('td');
+      td.colSpan=4; td.className='visit-status'; td.textContent='Mbola tsy misy mpitsidika voarakitra.'; tr.append(td); body.append(tr); return;
+    }
     rows.forEach((visit, index) => {
       const tr=document.createElement('tr');
-      const number=document.createElement('td'); number.textContent=String(state.visitorPage*pageSize+index+1).padStart(2,'0');
+      const number=document.createElement('td'); number.textContent=String(startIndex+index+1).padStart(2,'0');
       const deviceCell=document.createElement('td'), device=document.createElement('div'); device.className='visit-person';
       const avatar=document.createElement('span'); avatar.className='visit-avatar'; avatar.textContent=/Apple/i.test(visit.device_label||'')?'':/Samsung/i.test(visit.device_label||'')?'S':/Xiaomi/i.test(visit.device_label||'')?'X':'D';
       const details=document.createElement('span'); details.className='visit-person-copy'; const name=document.createElement('b'); name.textContent=visit.device_label || 'Appareil non identifié'; const sub=document.createElement('small'); sub.textContent='Visiteur anonyme · identifiant privé'; details.append(name,sub); device.append(avatar,details); deviceCell.append(device);
@@ -393,6 +393,20 @@
       const statusCell=document.createElement('td'); const status=document.createElement('span'); status.className='visit-status-pill'; status.innerHTML='<i></i> Unique'; statusCell.append(status);
       tr.append(number,deviceCell,dateCell,statusCell); body.append(tr);
     });
+  }
+  function renderVisitorPage() {
+    const total = state.visitorRows.length;
+    // Login preview is intentionally limited to five rows. The complete list lives on /visiteurs.
+    buildVisitorRows($('recentVisitsPreview'), state.visitorRows.slice(0,5), 0);
+    $('openVisitors')?.classList.toggle('hide', total <= 5);
+    say('previewVisitCount', total.toLocaleString('fr-FR'));
+    say('previewCountText', String(Math.min(total,5)) + (total > 5 ? ' / ' + total : ''));
+    const body = $('recentVisits');
+    if (!body) { say('visitCount', total.toLocaleString('fr-FR')); say('visitorButtonCount', `(${total})`); return; }
+    const pageSize = 25, pages = Math.max(1, Math.ceil(total/pageSize));
+    state.visitorPage = Math.min(state.visitorPage, pages-1);
+    const rows = state.visitorRows.slice(state.visitorPage*pageSize, (state.visitorPage+1)*pageSize);
+    buildVisitorRows(body, rows, state.visitorPage*pageSize);
     say('visitPageInfo', total ? `Affichage ${state.visitorPage*pageSize+1}–${Math.min((state.visitorPage+1)*pageSize,total)} sur ${total} visiteurs` : '0 visiteur');
     if ($('visitPrev')) $('visitPrev').disabled=state.visitorPage===0;
     if ($('visitNext')) $('visitNext').disabled=state.visitorPage>=pages-1;
