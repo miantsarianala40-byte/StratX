@@ -4,7 +4,7 @@
   const SUPABASE_KEY = 'sb_publishable_IFZGXyCPkt_eZFjaDdWOaA_LYZ1UdEg';
   const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
   const $ = id => document.getElementById(id);
-  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', gameSection: 'overview', games: [], sports: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
+  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', gameSection: 'overview', games: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
   const gameInfo = {
     Aviator: { desc: 'Consignez les observations passées du jeu Aviator et consultez un résumé descriptif.', logo: '✈', cls: 'aviator-logo' },
     JetX: { desc: 'Un espace dédié pour garder un historique personnel des observations JetX.', logo: 'JX', cls: 'jetx-logo' },
@@ -49,7 +49,10 @@
     if ($('displayName') && !$('displayName').dataset.loaded) { $('displayName').value = meta.display_name || ''; $('profileBio').value = meta.bio || ''; $('displayName').dataset.loaded = 'yes'; }
   }
   const gameSlug = { aviator: 'Aviator', jetx: 'JetX', cosmox: 'CosmoX' };
-  const gameRouteSections = new Set(['resultats', 'historique', 'statistiques', 'ajouter']);
+  const gameRouteSections = new Set(['resultats', 'historique', 'statistiques']);
+  let authMode = 'login';
+  let signupStep = 1;
+  let resetSent = false;
   function parseRoute() {
     const path = decodeURIComponent(window.location.pathname).replace(/\/+$/, '') || '/';
     const parts = path.split('/').filter(Boolean);
@@ -73,7 +76,7 @@
     const route = parseRoute();
     if (!state.user) {
       $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
-      if (route.page === 'auth') { if (route.authMode === 'signup') toggleSignupFields(true); else toggleSignupFields(false); }
+      if (route.page === 'auth') { if (route.authMode === 'signup') setAuthFlow('signup', 1); else if (route.authMode === 'reset') setAuthFlow('reset'); else setAuthFlow('login'); }
       return;
     }
     $('auth')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
@@ -85,10 +88,9 @@
       document.querySelectorAll('.game-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.game === route.game));
     }
     showPage(route.page, false);
-    if (route.page === 'auth' && route.authMode === 'reset') toggleSignupFields(false);
+    if (route.page === 'auth' && route.authMode === 'reset') setAuthFlow('reset');
   }
   function showPage(id, updateUrl = true) {
-    if (id === 'sports') { setStatus('Module football verrouillé temporairement', false); return; }
     if (!$(`${id}`) || !$(`${id}`).classList.contains('page')) return;
     state.currentPage = id;
     document.querySelectorAll('.page').forEach(el => el.classList.toggle('hide', el.id !== id));
@@ -120,19 +122,15 @@
     if (!db || !state.user) return;
     say('refresh', '↻ Actualiser');
     try {
-      const [posts, sports, games] = await Promise.all([
+      const [posts, games] = await Promise.all([
         queryTable('analyses', 'id,title,body,created_at,user_id,author_name'),
-        queryTable('sports_analyses', 'id,competition,teams,notes,match_date,created_at,user_id'),
         queryTable('game_observations', 'id,game_name,multiplier,note,observed_at,created_at,user_id')
       ]);
-      state.posts = posts; state.sports = sports; state.games = games; authUI();
-      say('countPosts', posts.length); say('countSports', sports.length); say('countGames', games.length);
-      say('sportsCount', `${sports.length} fiche${sports.length === 1 ? '' : 's'}`);
-      renderList('sportslist', sports, r => ({ title: r.teams, body: `${r.competition || 'Compétition non précisée'}\n${r.notes || ''}`, date: r.match_date || r.created_at, eyebrow: 'FICHE FOOTBALL' }), 'Aucune rencontre enregistrée', 'Ajoutez une fiche de rencontre pour la retrouver ici.');
+      state.posts = posts; state.games = games; authUI();
+      say('countPosts', posts.length); say('countGames', games.length);
       renderCommunity();
-      renderList('latest', [...posts.map(r => ({ title: r.title, body: r.body, created_at: r.created_at, kind: 'PUBLICATION' })), ...sports.map(r => ({ title: r.teams, body: r.competition, created_at: r.created_at, kind: 'FOOTBALL' })), ...games.map(r => ({ title: `${r.game_name}${r.multiplier == null ? '' : ` · ${Number(r.multiplier).toFixed(2)}x`}`, body: 'Observation historique enregistrée', created_at: r.created_at, kind: 'OBSERVATION' }))].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5), r => ({ title: r.title, body: r.body, date: r.created_at, eyebrow: r.kind }), 'Votre espace est prêt', 'Vos publications et analyses apparaîtront ici.');
       renderGame(); setStatus('Connecté · synchronisé');
-    } catch (error) { setStatus('Erreur de synchronisation', false); console.error('StratX refresh:', error); ['sportslist','posts','latest','gameslist'].forEach(id => { const el=$(id); if(el) el.textContent=friendlyError(error); }); }
+    } catch (error) { setStatus('Erreur de synchronisation', false); console.error('StratX refresh:', error); ['posts','gameslist'].forEach(id => { const el=$(id); if(el) el.textContent=friendlyError(error); }); }
   }
   const communityStoreKey = suffix => `stratx-community-${state.user?.id || 'guest'}-${suffix}`;
   function readCommunityStore(suffix, fallback) { try { const value = JSON.parse(localStorage.getItem(communityStoreKey(suffix)) || 'null'); return value ?? fallback; } catch { return fallback; } }
@@ -181,18 +179,6 @@
     const rows = state.games.filter(r => r.game_name === name).sort((a,b) => new Date(b.observed_at || b.created_at) - new Date(a.observed_at || a.created_at));
     const vals = rows.map(r => Number(r.multiplier)).filter(v => Number.isFinite(v) && v > 0);
     say('gameTotal', rows.length); say('gameAverage', vals.length ? `${(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2)}x` : '—'); say('gameMaximum', vals.length ? `${Math.max(...vals).toFixed(2)}x` : '—'); say('gameCountChip', `${rows.length} entrée${rows.length===1?'':'s'}`);
-    // Indicateurs descriptifs : aucun indicateur ne constitue une prédiction du prochain tour.
-    const indicator = (id, barId, value) => { const el = $(id), bar = $(barId); if (el) el.textContent = value == null ? '—' : `${Math.round(value)}%`; if (bar) bar.style.width = value == null ? '0%' : `${Math.max(0, Math.min(100, value))}%`; };
-    if (vals.length >= 2) {
-      const mean = vals.reduce((a,b)=>a+b,0) / vals.length;
-      const variance = vals.reduce((a,b)=>a + Math.pow(b-mean,2),0) / vals.length;
-      const cv = mean > 0 ? Math.sqrt(variance) / mean : 1;
-      indicator('historyStability','historyStabilityBar',100 / (1 + cv));
-      indicator('historyRisk','historyRiskBar',100 * cv / (1 + cv));
-    } else { indicator('historyStability','historyStabilityBar',null); indicator('historyRisk','historyRiskBar',null); }
-    indicator('historyReliability','historyReliabilityBar',100 * (1 - Math.exp(-vals.length / 12)));
-    const indicatorNote = $('historyIndicatorNote');
-    if (indicatorNote) indicatorNote.textContent = vals.length < 2 ? 'Il faut au moins 2 coefficients historiques pour calculer la stabilité et la variation.' : `${vals.length} coefficients utilisés. Ces scores décrivent la dispersion et le volume des données enregistrées, pas les chances de gagner.`;
     const latest = rows[0];
     const result = $('analysisResult');
     if (result) { result.replaceChildren(); if (latest) { const label=document.createElement('div'); label.className='eyebrow'; label.textContent='DERNIÈRE OBSERVATION ENREGISTRÉE'; const value=document.createElement('h3'); value.className='analysis-result-value'; value.textContent=latest.multiplier == null ? 'Observation enregistrée' : `${Number(latest.multiplier).toFixed(2)}x`; const date=document.createElement('p'); date.className='subtle'; date.textContent=formatDate(latest.observed_at || latest.created_at); result.append(label,value,date); } else { const label=document.createElement('div'); label.className='eyebrow'; label.textContent='RÉSULTAT'; const value=document.createElement('h3'); value.textContent='Aucune observation enregistrée'; const date=document.createElement('p'); date.className='subtle'; date.textContent='Enregistrez une valeur observée pour l’afficher ici.'; result.append(label,value,date); } }
@@ -213,20 +199,35 @@
     if (section === 'historique') { state.showGameHistory = true; if (history) history.classList.remove('hide'); }
     renderList('gameslist', rows, r => ({ title: r.multiplier == null ? 'Observation sans valeur numérique' : `Valeur observée : ${Number(r.multiplier).toFixed(2)}x`, body: '', date: r.observed_at || r.created_at, eyebrow: name.toUpperCase() }), `Aucune observation ${name}`, `Les entrées que vous ajouterez à ${name} seront affichées ici.`);
   }
-  function toggleSignupFields(show) {
-    const wrap = $('signupNameWrap');
-    if (wrap) wrap.classList.toggle('signup-mode', !!show);
-    if ($('signupName')) $('signupName').required = !!show;
-    const signupButton = $('signup');
-    if (signupButton) signupButton.innerHTML = show ? 'Valider la création <span>→</span>' : 'Créer mon compte';
-    if ($('password')) $('password').autocomplete = show ? 'new-password' : 'current-password';
-    if (show) $('signupName')?.focus();
+  function setAuthFlow(mode, step = 1) {
+    authMode = mode; signupStep = step; resetSent = false;
+    const signup = mode === 'signup', reset = mode === 'reset', update = mode === 'updatePassword';
+    $('signupNameWrap')?.classList.toggle('hide', !signup || step !== 1);
+    $('emailField')?.classList.toggle('hide', update || (signup && step !== 1));
+    $('passwordField')?.classList.toggle('hide', reset || (signup && step !== 2));
+    $('authSteps')?.classList.toggle('hide', !signup);
+    $('authStepOne')?.classList.toggle('active', step === 1);
+    $('authStepTwo')?.classList.toggle('active', step === 2);
+    $('backAuthStep')?.classList.toggle('hide', !(signup && step === 2));
+    $('updatePassword')?.classList.toggle('hide', !update);
+    $('login').classList.toggle('hide', signup || reset || update);
+    $('signup').classList.toggle('hide', reset || update);
+    $('resetPassword').classList.toggle('hide', signup || update);
+    $('signupName').required = signup && step === 1;
+    $('email').required = !signup || step === 1;
+    $('password').required = !reset && (!signup || step === 2 || update);
+    $('password').autocomplete = signup ? 'new-password' : 'current-password';
+    $('signup').innerHTML = signup ? (step === 1 ? 'Continuer <span>→</span>' : 'Créer mon compte <span>→</span>') : 'Créer mon compte';
+    $('resetPassword').textContent = reset ? (resetSent ? 'Renvoyer le lien' : 'Envoyer le lien de réinitialisation') : 'Mot de passe oublié ?';
+    $('authIntro').textContent = signup ? (step === 1 ? 'Étape 1 sur 2 — renseignez votre identité et votre e-mail.' : 'Étape 2 sur 2 — choisissez un mot de passe sécurisé.') : reset ? 'Étape 1 : renseignez votre e-mail. Étape 2 : ouvrez le lien reçu pour choisir un nouveau mot de passe.' : update ? 'Dernière étape : choisissez un nouveau mot de passe sécurisé.' : 'Connectez-vous pour accéder à votre tableau de bord.';
+    if (signup && step === 1) $('signupName')?.focus();
+    else if ((signup && step === 2) || update) $('password')?.focus();
   }
   async function runAuth(action) {
     if (!db) { msg('authmsg', 'Le service Supabase ne se charge pas. Vérifiez votre connexion et les clés de configuration.', true); return; }
     const email = $('email')?.value.trim() || '';
     const password = $('password')?.value || '';
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg('authmsg', 'Saisissez une adresse e-mail valide.', true); $('email')?.focus(); return; }
+    if (action !== 'updatePassword' && (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) { msg('authmsg', 'Saisissez une adresse e-mail valide.', true); $('email')?.focus(); return; }
     if (action !== 'reset' && password.length < 6) { msg('authmsg', 'Le mot de passe doit contenir au moins 6 caractères.', true); $('password')?.focus(); return; }
     if (action === 'signup') {
       const displayName = $('signupName')?.value.trim() || '';
@@ -256,10 +257,16 @@
         } else {
           msg('authmsg', 'Compte créé. Ouvrez l’e-mail de confirmation envoyé par Supabase, confirmez votre adresse, puis revenez ici pour vous connecter.');
         }
+      } else if (action === 'updatePassword') {
+        const { error } = await db.auth.updateUser({ password });
+        if (error) throw error;
+        msg('authmsg', 'Mot de passe modifié avec succès. Vous pouvez maintenant vous connecter.');
+        await db.auth.signOut();
+        setAuthFlow('login');
       } else {
         const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/mot-de-passe-oublie' });
         if (error) throw error;
-        msg('authmsg', 'Si cette adresse correspond à un compte, un e-mail de réinitialisation sera envoyé.');
+        resetSent = true; $('resetPassword').textContent = 'Renvoyer le lien'; msg('authmsg', 'Étape 2 : consultez votre boîte e-mail et ouvrez le lien sécurisé de Supabase. Vérifiez aussi les courriers indésirables.');
       }
     } catch (error) { msg('authmsg', friendlyError(error), true); }
     finally { ['login','signup','resetPassword'].forEach(id => { const b = $(id); if (b) b.disabled = false; }); }
@@ -271,29 +278,26 @@
     document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.gameSection = 'overview'; state.showGameHistory = false; document.querySelectorAll('.game-tab').forEach(tab => tab.classList.toggle('active', tab === btn)); history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
     document.querySelectorAll('[data-game-section]').forEach(btn => btn.addEventListener('click', () => { const next = btn.dataset.gameSection; if (!['overview', ...gameRouteSections].includes(next)) return; state.gameSection = next; state.showGameHistory = next === 'historique'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
     $('toggleGameHistory')?.addEventListener('click', () => { state.showGameHistory = !state.showGameHistory; state.gameSection = state.showGameHistory ? 'historique' : 'overview'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); });
-    $('login').addEventListener('click', () => { history.pushState({}, '', '/connexion'); toggleSignupFields(false); runAuth('login'); });
+    $('login').addEventListener('click', () => { history.pushState({}, '', '/connexion'); setAuthFlow('login'); runAuth('login'); });
     $('signup').addEventListener('click', () => {
-      if (!$('signupNameWrap')?.classList.contains('signup-mode')) {
-        history.pushState({}, '', '/inscription');
-        toggleSignupFields(true);
-        msg('authmsg', 'Renseignez votre nom affiché, votre e-mail et un mot de passe, puis validez la création du compte.');
-        return;
+      if (authMode !== 'signup') { history.pushState({}, '', '/inscription'); setAuthFlow('signup', 1); msg('authmsg', 'Étape 1 : saisissez votre nom affiché et votre adresse e-mail.'); return; }
+      if (signupStep === 1) {
+        const name = $('signupName').value.trim(), email = $('email').value.trim();
+        if (name.length < 2) { msg('authmsg', 'Saisissez un nom affiché valide.', true); $('signupName').focus(); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg('authmsg', 'Saisissez une adresse e-mail valide.', true); $('email').focus(); return; }
+        setAuthFlow('signup', 2); msg('authmsg', 'Étape 2 : créez un mot de passe d’au moins 6 caractères.'); return;
       }
       runAuth('signup');
     });
-    $('resetPassword').addEventListener('click', () => { history.pushState({}, '', '/mot-de-passe-oublie'); toggleSignupFields(false); runAuth('reset'); });
-    $('password').addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); runAuth($('signupNameWrap')?.classList.contains('signup-mode') ? 'signup' : 'login'); }
+    $('resetPassword').addEventListener('click', () => {
+      if (authMode !== 'reset') { history.pushState({}, '', '/mot-de-passe-oublie'); setAuthFlow('reset'); msg('authmsg', 'Étape 1 : saisissez l’adresse e-mail de votre compte.'); return; }
+      runAuth('reset');
     });
+    $('backAuthStep')?.addEventListener('click', () => { setAuthFlow('signup', 1); msg('authmsg', 'Modifiez vos informations si nécessaire.'); });
+    $('updatePassword')?.addEventListener('click', () => runAuth('updatePassword'));
+    $('password').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runAuth(authMode === 'signup' ? 'signup' : 'login'); } });
     $('togglePassword').addEventListener('click', () => { const p=$('password'); p.type = p.type === 'password' ? 'text' : 'password'; });
     $('logout').addEventListener('click', signOut); $('profileLogout').addEventListener('click', signOut); $('refresh').addEventListener('click', refresh);
-    $('sportform')?.addEventListener('submit', async e => {
-      e.preventDefault(); if (!state.user) return;
-      const btn=e.submitter; if(btn) btn.disabled=true;
-      const date = $('matchdate').value ? new Date($('matchdate').value).toISOString() : null;
-      try { const { error } = await db.from('sports_analyses').insert({ user_id: state.user.id, competition: $('competition').value.trim(), teams: $('teams').value.trim(), notes: $('notes').value.trim(), match_date: date }); if(error) throw error; e.target.reset(); msg('sportmsg','Fiche de rencontre enregistrée.'); await refresh(); }
-      catch(error) { msg('sportmsg',friendlyError(error),true); } finally { if(btn) btn.disabled=false; }
-    });
     $('gameform').addEventListener('submit', async e => {
       e.preventDefault(); if (!state.user) return;
       const raw=$('multiplier').value; const observed = $('observedAt').value ? new Date($('observedAt').value).toISOString() : new Date().toISOString(); const btn=e.submitter; if(btn) btn.disabled=true;
@@ -328,7 +332,7 @@
     try {
       const { data, error } = await db.auth.getSession(); if(error) throw error; state.user=data.session?.user || null; authUI();
       if(state.user) { setStatus('Connecté'); await refresh(); syncRouteFromUrl(); } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
-      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.sports=[]; state.games=[]; } });
+      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide'); history.replaceState({}, '', '/mot-de-passe-oublie'); setAuthFlow('updatePassword'); msg('authmsg', 'Lien vérifié. Choisissez maintenant un nouveau mot de passe.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; } });
     } catch(error) { setStatus('Erreur de connexion',false); msg('authmsg',friendlyError(error),true); console.error('StratX auth init:',error); }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
