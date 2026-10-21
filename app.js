@@ -330,6 +330,58 @@
     $('requestDeleteAccount')?.addEventListener('click', async()=>{if(!state.user||!db)return;if(!confirm('Envoyer une demande de suppression de compte ? Le compte ne sera pas supprimé automatiquement.'))return;const b=$('requestDeleteAccount');b.disabled=true;try{const {error}=await db.from('account_deletion_requests').insert({user_id:state.user.id,email:state.user.email,status:'pending'});if(error)throw error;msg('deleteAccountMsg','Demande enregistrée. Une validation e-mail et une suppression côté serveur restent nécessaires avant toute suppression définitive.');}catch(error){msg('deleteAccountMsg',friendlyError(error),true);}finally{b.disabled=false;}});
     $('copyId').addEventListener('click', async () => { const id=state.user?.id; if(!id) return; try { await navigator.clipboard.writeText(id); $('copyId').textContent='Copié ✓'; setTimeout(()=>$('copyId').textContent='Copier',1600); } catch { msg('profilemsg','Impossible de copier automatiquement. Sélectionnez l’identifiant pour le copier.'); } });
   }
+  const isPremiumAdmin = () => state.user?.app_metadata?.role === 'admin';
+  async function loadPremiumPaymentRequests() {
+    const panel = $('premiumAdminPanel'); const list = $('premiumAdminRequests');
+    if (!panel || !list || !isPremiumAdmin()) return;
+    panel.classList.remove('hide'); list.textContent = 'Chargement des demandes…';
+    try {
+      const { data, error } = await db.from('premium_payment_requests').select('id,user_id,payment_method,transaction_ref,amount_ariary,note,status,created_at').eq('status','pending').order('created_at',{ascending:true});
+      if (error) throw error;
+      list.replaceChildren();
+      if (!data?.length) { list.textContent = 'Aucune demande en attente.'; return; }
+      data.forEach(req => {
+        const card = document.createElement('article'); card.className = 'premium-admin-request';
+        const details = document.createElement('div');
+        const title = document.createElement('h4'); title.textContent = `${req.payment_method} · ${Number(req.amount_ariary).toLocaleString('fr-FR')} Ar`;
+        const body = document.createElement('p'); body.textContent = `Réf. : ${req.transaction_ref} · User ID : ${req.user_id}`;
+        const note = document.createElement('small'); note.textContent = req.note || 'Aucune note';
+        const date = document.createElement('small'); date.textContent = `Envoyée le ${formatDate(req.created_at)}`;
+        details.append(title,body,note,date);
+        const actions = document.createElement('div'); actions.className='premium-admin-actions';
+        const approve = document.createElement('button'); approve.type='button'; approve.className='btn btn-primary'; approve.textContent='Paiement vérifié · Activer 30 jours';
+        approve.addEventListener('click',()=>reviewPremiumRequest(req,'approved'));
+        const reject = document.createElement('button'); reject.type='button'; reject.className='btn btn-outline'; reject.textContent='Refuser'; reject.addEventListener('click',()=>reviewPremiumRequest(req,'rejected'));
+        actions.append(approve,reject); card.append(details,actions); list.append(card);
+      });
+    } catch (error) { list.textContent = `Impossible de charger les demandes : ${friendlyError(error)}`; }
+  }
+  async function reviewPremiumRequest(req, decision) {
+    if (!isPremiumAdmin() || !db) return;
+    const statusMsg = $('premiumAdminMessage');
+    if (decision === 'approved' && !confirm(`Confirmez-vous avoir vérifié le paiement ${req.transaction_ref} de ${Number(req.amount_ariary).toLocaleString('fr-FR')} Ar ? Cela activera 30 jours de Premium.`)) return;
+    try {
+      if (decision === 'approved') {
+        const { error: subError } = await db.from('premium_subscriptions').upsert({user_id:req.user_id,status:'active',expires_at:new Date(Date.now()+30*24*60*60*1000).toISOString(),updated_at:new Date().toISOString()},{onConflict:'user_id'});
+        if (subError) throw subError;
+      }
+      const { error } = await db.from('premium_payment_requests').update({status:decision,reviewed_at:new Date().toISOString(),reviewed_by:state.user.id}).eq('id',req.id).eq('status','pending');
+      if (error) throw error;
+      if (statusMsg) statusMsg.textContent = decision === 'approved' ? 'Paiement validé : accès Premium activé pour 30 jours.' : 'Demande refusée.';
+      await loadPremiumPaymentRequests();
+      if (req.user_id === state.user.id) await loadPremiumAccess();
+    } catch (error) { if(statusMsg) statusMsg.textContent = `Erreur : ${friendlyError(error)}`; }
+  }
+  async function loadMyPremiumRequests() {
+    if (!db || !state.user) return;
+    try {
+      const { data, error } = await db.from('premium_payment_requests').select('payment_method,transaction_ref,amount_ariary,status,created_at,admin_note').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(5);
+      if (error) throw error;
+      const msgEl = $('premiumRequestMessage');
+      if (data?.length && msgEl) msgEl.textContent = 'Dernière demande : ' + data.map(r => `${r.status} (${r.transaction_ref})`).join(' · ');
+    } catch (error) { console.warn('Premium request history:', error); }
+  }
+
   async function loadPremiumAccess() {
     const panel = $('premiumCalculator');
     const gate = $('premiumAccessGate');
@@ -369,12 +421,14 @@
       state.premiumAccess = false;
       panel.classList.add('hide');
       gate.classList.remove('hide');
-      if (message) message.textContent = `Impossible de valider l’accès Premium (${error?.code || 'erreur'}). Vérifiez la table premium_subscriptions, le droit SELECT et la policy RLS dans Supabase, puis réessayez.`;
+      if (message) message.textContent = 'Impossible de valider l’accès Premium. Le calculateur reste masqué. Vérifiez que la table premium_subscriptions est installée dans Supabase.';
       if (run) run.disabled = true;
       console.warn('StratX Premium access check:', error);
     } finally {
       state.premiumAccessLoading = false;
     }
+    await loadMyPremiumRequests();
+    await loadPremiumPaymentRequests();
     return state.premiumAccess;
   }
 
@@ -564,11 +618,22 @@
 
   $('premiumCheckAccess')?.addEventListener('click', () => loadPremiumAccess());
 
-  const premiumActivateInfo = $('premiumActivateInfo');
-  if (premiumActivateInfo) premiumActivateInfo.addEventListener('click', () => {
-    const message = $('premiumActivateMessage');
-    if (message) message.textContent = 'Interface d’offre prête côté visuel. Pour encaisser réellement, connectez un prestataire de paiement et configurez la validation des abonnements côté serveur avant de donner accès payant.';
+  $('premiumRequestForm')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (!db || !state.user) { msg('premiumRequestMessage','Connectez-vous avant d’envoyer une demande.',true); return; }
+    const button = $('premiumRequestSubmit'); button.disabled = true;
+    try {
+      const payload = {user_id:state.user.id,payment_method:$('premiumPaymentMethod').value,transaction_ref:$('premiumPaymentRef').value.trim(),amount_ariary:Number($('premiumPaymentAmount').value),note:$('premiumPaymentNote').value.trim(),status:'pending'};
+      if (!payload.transaction_ref || !Number.isFinite(payload.amount_ariary) || payload.amount_ariary <= 0) throw new Error('Saisissez une référence et un montant valides.');
+      const {error} = await db.from('premium_payment_requests').insert(payload);
+      if (error) throw error;
+      $('premiumRequestForm').reset();
+      msg('premiumRequestMessage','Demande envoyée. L’accès sera activé après vérification manuelle du paiement. Ne renvoyez pas plusieurs demandes pour la même transaction.');
+      await loadMyPremiumRequests(); await loadPremiumPaymentRequests();
+    } catch (error) { msg('premiumRequestMessage',friendlyError(error),true); }
+    finally { button.disabled = false; }
   });
+  $('premiumAdminRefresh')?.addEventListener('click',loadPremiumPaymentRequests);
 
   // Reduce casual copying of page text while preserving normal form-field editing.
   document.addEventListener('copy', e => { if (!e.target.closest('input,textarea,[contenteditable="true"]')) e.preventDefault(); });

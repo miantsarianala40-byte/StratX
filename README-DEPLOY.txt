@@ -24,3 +24,11 @@ SUPABASE PREMIUM
 
 NOTE
 Le paiement automatique n'est pas configuré dans ce pack. L'activation des abonnements doit être contrôlée côté serveur après validation d'un paiement par un prestataire.
+
+VALIDATION MANUELLE DES PAIEMENTS PREMIUM
+1. Dans Supabase > SQL Editor, exécutez le fichier premium_access.sql complet.
+2. Pour donner le rôle administrateur, ouvrez Authentication > Users, choisissez le compte du responsable et ajoutez dans app_metadata le JSON {"role":"admin"}. Faites-le uniquement depuis le tableau de bord Supabase (jamais depuis le navigateur public). Déconnectez/reconnectez ce compte pour renouveler son JWT.
+3. L'utilisateur connecté envoie une demande dans l'espace Premium avec le moyen de paiement, le montant et la référence de transaction. Ne demandez jamais son PIN ou code secret.
+4. Le responsable se connecte avec son compte administrateur, ouvre l'espace Premium et vérifie d'abord le paiement dans son compte marchand. Le panneau « Demandes Premium à valider » permet ensuite d'approuver ou de refuser la demande. L'approbation active 30 jours à partir du moment de validation.
+5. Sans le rôle app_metadata.role=admin, le panneau d'administration ne sera pas visible et les validations seront refusées par RLS.
+6. Ce flux ne vérifie pas automatiquement les transferts : l'administrateur doit confirmer chaque paiement manuellement avant d'appuyer sur « Paiement vérifié ». Le client ne doit pas être activé sur la seule base d'une capture d'écran.
