@@ -131,3 +131,43 @@ button:disabled{cursor:not-allowed!important;opacity:.48;filter:saturate(.5)}
 .voice-field{display:flex;align-items:stretch;gap:8px;min-width:0}.voice-field>input,.voice-field>.input-suffix{flex:1;min-width:0}.voice-field .input-suffix input{min-width:0}.voice-input{flex:0 0 50px;width:50px;min-height:48px;border:1px solid #67532e;border-radius:12px;background:linear-gradient(145deg,#292114,#11151b);color:#f3d58a;font-size:20px;cursor:pointer;box-shadow:inset 0 1px #ffffff0a;transition:all .18s}.voice-input:hover,.voice-input.listening{border-color:#e7bd61;background:#3a2d18;box-shadow:0 0 0 3px #e7bd611c,0 0 22px #e7bd6110}.voice-input.listening{animation:voicePulse 1s ease-in-out infinite alternate}.voice-input:disabled{opacity:.7}@keyframes voicePulse{from{transform:scale(1)}to{transform:scale(1.04)}}
 .calculator-surface .calc-results{gap:15px}.calculator-surface .calc-row{margin:0}.premium-calculator{padding:clamp(20px,4vw,34px)!important;background:radial-gradient(ellipse at 8% 0,#76571d36,transparent 58%),linear-gradient(145deg,#201a11,#0b0d12)!important}.premium-calculator .form-grid{margin-top:22px}.premium-calculator #premiumRun{min-height:54px;padding-inline:24px;border-radius:13px;font-weight:800}.premium-calculator .calc-row-premium{border:1px solid #a7833c;background:radial-gradient(ellipse at 0 0,#73551c33,transparent 60%),linear-gradient(145deg,#2a2114,#11130f);box-shadow:0 14px 35px #0004,inset 0 1px #ffedbd12}.premium-calculator .calc-row-premium h3{color:#ffdf91}
 .about-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:22px}.about-grid>.surface{position:relative;padding:clamp(20px,3vw,30px);border:1px solid #303641;border-radius:20px;background:linear-gradient(145deg,#171c24,#0d1016);box-shadow:0 14px 32px #0002;min-width:0}.about-grid>.surface h3{font-size:clamp(17px,2vw,21px);line-height:1.35;margin:0 0 12px;color:#f2d58d;letter-spacing:-.3px}.about-grid>.surface p{margin:0;color:#aeb7c3;line-height:1.85;font-size:13px;overflow-wrap:anywhere}.about-hero{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:24px;padding:clamp(22px,4vw,36px);border-radius:22px;background:radial-gradient(ellipse at 0 0,#70532135,transparent 65%),linear-gradient(145deg,#171c24,#0b0e13)}.about-hero h3{font-size:clamp(22px,3vw,30px);margin:8px 0 12px;line-height:1.25}.about-hero p{line-height:1.85;color:#b2bbc7;margin:0;max-width:850px}@media(max-width:650px){.about-grid{grid-template-columns:1fr;gap:12px}.about-hero{grid-template-columns:1fr;gap:15px}.about-monogram{width:72px;height:72px}}
+
+/* Premium Suite: high-end member-offer presentation and multilingual voice controls */
+.voice-language-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(190px,280px);align-items:center;gap:8px 16px;margin:18px 0 8px;padding:13px 15px;border:1px solid #303744;border-radius:14px;background:linear-gradient(120deg,#171c24,#10141b)}
+.voice-language-row label{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#c5ccd6;margin:0}
+.voice-language{width:100%;min-width:0;padding:11px 12px;border-radius:10px;border:1px solid #414957;background:#0c1016;color:#f1f3f7;font:inherit;font-size:13px}
+.voice-language-note{grid-column:1/-1;color:#8f9aa9;font-size:11px;line-height:1.5}
+.premium-hero-pro{position:relative;overflow:hidden;isolation:isolate;border:1px solid #967438!important;background:radial-gradient(ellipse at 84% 10%,#c79a4026,transparent 36%),radial-gradient(ellipse at 0 100%,#76541e2b,transparent 54%),linear-gradient(125deg,#1c1a16 0%,#11151b 56%,#0b0e13 100%)!important;box-shadow:0 24px 65px #0005,inset 0 1px #ffe5a61a!important}
+.premium-hero-pro:after{content:"";position:absolute;z-index:-1;width:260px;height:260px;right:-80px;bottom:-130px;border:1px solid #d3a64b32;border-radius:50%;box-shadow:0 0 0 24px #d3a64b08,0 0 0 48px #d3a64b06}
+.premium-hero-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.premium-live-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid #99743b77;border-radius:999px;background:#b88b2912;color:#f0d79c;font-size:9px;font-weight:900;letter-spacing:.13em}
+.premium-live-pill i{width:6px;height:6px;border-radius:50%;background:#e5bd65;box-shadow:0 0 12px #e5bd65;display:inline-block}
+.premium-crown-mark{display:grid;place-items:center;width:43px;height:43px;border-radius:14px;border:1px solid #bd984e77;background:linear-gradient(145deg,#4a3618,#17130d);color:#ffe4a0;font-size:24px;box-shadow:0 8px 25px #0004}
+.premium-hero-pro h2{max-width:720px;font-size:clamp(34px,6vw,58px);line-height:1.05;letter-spacing:-.045em;margin:14px 0}
+.premium-hero-pro h2 em{color:#f0d18a;font-style:normal;text-shadow:0 0 32px #c7963b24}
+.premium-hero-pro>p{max-width:700px;color:#b7bfcb;line-height:1.85;font-size:14px}
+.premium-hero-benefits{display:flex;flex-wrap:wrap;gap:9px;margin:22px 0 20px}
+.premium-hero-benefits span{padding:9px 12px;border:1px solid #39404a;border-radius:10px;background:#ffffff05;color:#d9dee6;font-size:11px;font-weight:700}
+.premium-hero-pro .premium-access-mark{display:inline-flex;gap:9px;align-items:center;padding:11px 14px;border-radius:12px;border:1px solid #aa853f55;background:#d6a33b0d;color:#f3d48a;letter-spacing:.15em;font-size:10px;font-weight:900}
+.premium-feature-grid{gap:15px!important;margin:20px 0 24px}
+.premium-feature-card{position:relative;min-width:0;padding:23px!important;border:1px solid #303744!important;border-radius:18px!important;background:linear-gradient(145deg,#191e27,#0d1117)!important;box-shadow:0 14px 32px #0002;transition:transform .2s,border-color .2s}
+.premium-feature-card:hover{transform:translateY(-3px);border-color:#92713a!important}
+.premium-feature-card>span{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:linear-gradient(145deg,#473519,#17140e);border:1px solid #99763866;color:#f2d38a;font-size:17px;font-weight:900;margin-bottom:18px}
+.premium-feature-card h3{font-size:17px;margin:0 0 10px;color:#f0d38d}
+.premium-feature-card p{font-size:12px;line-height:1.8;color:#aeb7c4;margin:0}
+.premium-offer-card{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(250px,.75fr);gap:20px;padding:clamp(20px,4vw,34px);margin:24px 0;border:1px solid #a88343;border-radius:22px;background:radial-gradient(ellipse at 0 0,#b88b2920,transparent 58%),linear-gradient(130deg,#1b1a16,#10141b 65%);box-shadow:0 22px 58px #0004,inset 0 1px #fff1}
+.premium-offer-copy h3{font-size:clamp(24px,4vw,34px);margin:9px 0 12px;color:#f4d895;letter-spacing:-.03em}
+.premium-offer-copy>p{max-width:600px;color:#b7c0cb;line-height:1.8;font-size:13px}
+.premium-offer-points{display:grid;gap:11px;margin-top:21px}
+.premium-offer-points span{font-size:12px;color:#d9dfe7}
+.premium-offer-points span:first-letter{color:#f1d18b}
+.premium-offer-side{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:12px;padding:22px;border:1px solid #78603988;border-radius:17px;background:linear-gradient(145deg,#2a2114,#11130f)}
+.premium-offer-crown{display:grid;place-items:center;width:50px;height:50px;border:1px solid #bd984d77;border-radius:15px;background:#f0c76a12;color:#ffdf96;font-size:27px}
+.premium-offer-label{font-size:10px;letter-spacing:.16em;color:#f3d68f}
+.premium-offer-side small{color:#aab2be;line-height:1.6}
+.premium-offer-side .btn{width:100%;justify-content:center;min-height:48px}
+.premium-offer-side .message{margin:0;font-size:10px;line-height:1.65;color:#9da6b3}
+.premium-disclaimer{border-color:#343a44!important;background:linear-gradient(145deg,#171c24,#0c1016)!important;padding:clamp(20px,3vw,28px)!important}
+.premium-disclaimer h3{color:#e8d19a;font-size:clamp(17px,2.5vw,22px);line-height:1.45;margin:9px 0}
+.premium-disclaimer p{color:#aeb7c3;font-size:12px;line-height:1.85;margin:0}
+@media(max-width:650px){.voice-language-row{grid-template-columns:1fr;gap:9px;padding:12px}.voice-language-note{grid-column:auto}.premium-offer-card{grid-template-columns:1fr;gap:16px}.premium-offer-side{padding:18px}.premium-hero-benefits{gap:7px}.premium-hero-benefits span{font-size:10px;padding:8px 9px}.premium-hero-pro h2{font-size:36px}}

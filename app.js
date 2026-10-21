@@ -375,42 +375,136 @@
       out.innerHTML=`<article class="calc-row calc-row-premium"><div class="calc-result-main"><small class="eyebrow">SCÉNARIO SIMULÉ · PREMIUM</small><h3>${time} <span>·</span> ${value}x</h3><p>Scénario illustratif, sans garantie sur le jeu réel</p></div><div class="calc-metrics"><span><small>Stabilité*</small><b>${stability}%</b></span><span><small>Risque*</small><b>${risk}%</b></span><span><small>Indice*</small><b>${index}%</b></span></div></article><p class="subtle">Même heure et coefficient = même sortie affichée. Les indicateurs sont illustratifs et non validés statistiquement.</p>`;
     });
 
-  // Voice entry for time and coefficient (Web Speech API, supported browsers).
+  // Multilingual voice entry. Actual language support depends on the browser speech service.
+  const normalizeSpeech = value => String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’']/g, ' ').replace(/-/g, ' ').replace(/[^\p{L}\p{N}.,\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+  const speechWords = {
+    zero:0, oh:0, nought:0, nil:0, un:1, une:1, one:1, uno:1, uma:1, um:1, ein:1, eins:1, uno:1, una:1,
+    deux:2, two:2, dos:2, duas:2, dois:2, zwei:2, due:2,
+    trois:3, three:3, tres:3, três:3, drei:3, tre:3,
+    quatre:4, four:4, cuatro:4, quattro:4, vier:4,
+    cinq:5, five:5, cinco:5, fünf:5, cinque:5,
+    six:6, seis:6, sechs:6, sei:6,
+    sept:7, seven:7, siete:7, sete:7, sieben:7, sette:7,
+    huit:8, eight:8, ocho:8, oito:8, acht:8, otto:8,
+    neuf:9, nine:9, nueve:9, nove:9, neun:9,
+    dix:10, ten:10, diez:10, dez:10, zehn:10, dieci:10,
+    onze:11, eleven:11, once:11, undici:11, elf:11,
+    douze:12, twelve:12, doce:12, zwölf:12, dodici:12,
+    treize:13, thirteen:13, trece:13, dreizehn:13, tredici:13,
+    quatorze:14, fourteen:14, catorce:14, vierzehn:14, quattordici:14,
+    quinze:15, fifteen:15, quince:15, fünfzehn:15, quindici:15,
+    seize:16, sixteen:16, dieciseis:16, dezesseis:16, sechzehn:16, sedici:16,
+    dixsept:17, seventeen:17, diecisiete:17, dezessete:17, siebzehn:17, diciassette:17,
+    dixhuit:18, eighteen:18, dieciocho:18, dezoito:18, achtzehn:18, diciotto:18,
+    dixneuf:19, nineteen:19, diecinueve:19, dezenove:19, neunzehn:19, diciannove:19,
+    vingt:20, twenty:20, veinte:20, vinte:20, zwanzig:20, venti:20,
+    trente:30, thirty:30, treinta:30, trinta:30, dreissig:30, dreißig:30, trenta:30,
+    quarante:40, forty:40, cuarenta:40, quarenta:40, vierzig:40, quaranta:40,
+    cinquante:50, fifty:50, cincuenta:50, cinquenta:50, fünfzig:50, cinquanta:50,
+    soixante:60, sixty:60, sesenta:60, sessenta:60, sechzig:60, sessanta:60,
+    soixantedix:70, seventy:70, setenta:70, siebzig:70, settanta:70,
+    quatrevingt:80, eighty:80, ochenta:80, oitenta:80, achtzig:80, ottanta:80,
+    quatrevingtdix:90, ninety:90, noventa:90, neunzig:90, novanta:90,
+    cent:100, hundred:100, cien:100, cento:100, hundert:100
+  };
+  const parseSpokenNumber = raw => {
+    const clean = normalizeSpeech(raw).replace(/\b(and|et|y|e|und)\b/g, ' ').trim();
+    const digit = clean.match(/^\d+(?:[.,]\d+)?$/);
+    if (digit) return Number(digit[0].replace(',', '.'));
+    // Common Malagasy forms for clock values.
+    const mg = clean.replace(/\biraika ambin ny folo\b/g,'11').replace(/\broa ambin ny folo\b/g,'12').replace(/\btelo ambin ny folo\b/g,'13').replace(/\befatra ambin ny folo\b/g,'14').replace(/\bdimy ambin ny folo\b/g,'15').replace(/\benina ambin ny folo\b/g,'16').replace(/\bfito ambin ny folo\b/g,'17').replace(/\bvalo ambin ny folo\b/g,'18').replace(/\bsivy ambin ny folo\b/g,'19').replace(/\broa polo\b/g,'20').replace(/\btelo polo\b/g,'30').replace(/\befatra polo\b/g,'40').replace(/\bdimy polo\b/g,'50').replace(/\benina polo\b/g,'60');
+    if (mg !== clean && /^\d+$/.test(mg)) return Number(mg);
+    if (/^\d+(?:\s+\d+)+$/.test(clean)) return Number(clean.split(/\s+/).join(''));
+    let total = 0, current = 0, found = false;
+    for (const token0 of clean.split(/\s+/)) {
+      const token = token0.replace(/[^a-z0-9]/g,'');
+      if (!token) continue;
+      if (/^\d+$/.test(token)) { current += Number(token); found = true; continue; }
+      if (Object.prototype.hasOwnProperty.call(speechWords, token)) {
+        const n = speechWords[token]; found = true;
+        if (n >= 100) { current = (current || 1) * n; total += current; current = 0; }
+        else if (n >= 20) current += n;
+        else current += n;
+      }
+    }
+    return found ? total + current : NaN;
+  };
+  const parseDecimalSpeech = raw => {
+    const clean = normalizeSpeech(raw);
+    const numeric = clean.match(/(\d+)\s*[,.]\s*(\d+)/);
+    if (numeric) return Number(numeric[1] + '.' + numeric[2]);
+    const sep = /\b(virgule|point|comma|decimal|dot|komma|coma|virgula|virgola|punto|comma|virgule)\b/;
+    const parts = clean.split(sep);
+    if (parts.length >= 3) {
+      const left = parseSpokenNumber(parts[0]);
+      const rightPhrase = parts.slice(2).join(' ');
+      const digitWords = rightPhrase.split(/\s+/).filter(Boolean).map(w => w.replace(/[^a-z0-9]/g,''));
+      const singleDigits = digitWords.length && digitWords.every(w => Object.prototype.hasOwnProperty.call(speechWords,w) && speechWords[w] >= 0 && speechWords[w] <= 9);
+      const right = singleDigits ? Number(digitWords.map(w => speechWords[w]).join('')) : parseSpokenNumber(rightPhrase);
+      if (Number.isFinite(left) && Number.isFinite(right)) return Number(`${Math.trunc(left)}.${String(Math.trunc(right)).padStart(2,'0')}`);
+    }
+    const plain = clean.replace(/\bx\b/g,'').trim();
+    if (/^\d+(?:[.,]\d+)?$/.test(plain)) return Number(plain.replace(',','.'));
+    return parseSpokenNumber(plain);
+  };
+  const parseTimeSpeech = raw => {
+    const clean = normalizeSpeech(raw);
+    const nums = clean.match(/\d+/g);
+    if (nums && nums.length >= 2) return [Number(nums[0]),Number(nums[1]),Number(nums[2] || 0)];
+    const unitPattern = /^(.*?)\s*(?:hours?|hrs?|heures?|hora|horas|ore|stunden|ora|ora|saacada|ساعة|ساعات)\b\s*(.*?)\s*(?:minutes?|mins?|minutos?|minuti|minuten|minitra|دقائق?)\b(?:\s*(.*?)\s*(?:seconds?|secs?|segundos?|secondi|sekunden|segondra|ثواني?)\b)?/i;
+    const m = clean.match(unitPattern);
+    if (m) return [parseSpokenNumber(m[1]),parseSpokenNumber(m[2]),m[3] ? parseSpokenNumber(m[3]) : 0];
+    const parts = clean.split(/[,;:]+/).map(x=>x.trim()).filter(Boolean);
+    if (parts.length >= 2) return [parseSpokenNumber(parts[0]),parseSpokenNumber(parts[1]),parts[2] ? parseSpokenNumber(parts[2]) : 0];
+    return null;
+  };
   document.querySelectorAll('[data-voice-target]').forEach(button => button.addEventListener('click', () => {
     const target = $(button.dataset.voiceTarget);
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!target) return;
     if (!SpeechRecognition) {
       const out = button.closest('.calculator-surface')?.querySelector('.calc-results');
-      if (out) out.innerHTML = '<p class="message">La saisie vocale n’est pas prise en charge par ce navigateur. Essayez Chrome et autorisez le microphone.</p>';
-      else alert('La saisie vocale n’est pas prise en charge par ce navigateur. Essayez Chrome et autorisez le microphone.');
+      const message = 'La saisie vocale n’est pas prise en charge par ce navigateur. Essayez Chrome et autorisez le microphone.';
+      if (out) out.innerHTML = `<p class="message">${message}</p>`; else alert(message);
       return;
     }
-    const recognition = new SpeechRecognition(); recognition.lang = 'fr-FR'; recognition.interimResults = false; recognition.maxAlternatives = 1;
-    button.classList.add('listening'); button.disabled = true;
+    const surface = button.closest('.calculator-surface');
+    const languageSelect = surface?.querySelector('.voice-language');
+    const recognition = new SpeechRecognition();
+    const requestedLanguage = languageSelect?.value || 'fr-FR';
+    recognition.lang = requestedLanguage === 'auto' ? (navigator.language || 'fr-FR') : requestedLanguage;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 3;
+    button.classList.add('listening');
+    button.disabled = true;
     recognition.onresult = event => {
-      const spoken = String(event.results?.[0]?.[0]?.transcript || '').trim().toLowerCase();
-      const frenchNumber = text => {
-        const clean = text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/-/g,' ');
-        const words = {zero:0,un:1,une:1,deux:2,trois:3,quatre:4,cinq:5,six:6,sept:7,huit:8,neuf:9,dix:10,onze:11,douze:12,treize:13,quatorze:14,quinze:15,seize:16,dixsept:17,dixhuit:18,dixneuf:19,vingt:20,trente:30,quarante:40,cinquante:50,soixante:60};
-        const direct = clean.match(/\d+(?:[.,]\d+)?/); if (direct) return Number(direct[0].replace(',','.'));
-        const tokens = clean.split(/\s+/); let total=0, current=0;
-        for (const token of tokens) { if (token==='et' || token==='heure' || token==='heures' || token==='h' || token==='virgule' || token==='point') continue; if (token==='demi') { current+=30; continue; } if (Object.prototype.hasOwnProperty.call(words,token)) { const n=words[token]; current = n>=20 ? current+n : current ? current+n : n; } }
-        return current || total || NaN;
-      };
-      if (target.type === 'time') {
-        const match = spoken.match(/(\d{1,2})\D+(?:heures?|h)\D*(\d{1,2})(?:\D+(\d{1,2}))?/i) || spoken.match(/(\d{1,2})[:h](\d{2})(?:[:h](\d{2}))?/i);
-        if (match) target.value = [Math.min(23,Number(match[1])),Math.min(59,Number(match[2])),Math.min(59,Number(match[3]||0))].map(n=>String(n).padStart(2,'0')).join(':');
-        else { const digits=spoken.match(/\d+/g); if(digits?.length>=2) target.value=[Math.min(23,Number(digits[0])),Math.min(59,Number(digits[1])),Math.min(59,Number(digits[2]||0))].map(n=>String(n).padStart(2,'0')).join(':'); else { const nums=spoken.split(/\s+(?:heures?|h)\s+/); if(nums.length>=2){const hh=frenchNumber(nums[0]), mm=frenchNumber(nums[1]); if(Number.isFinite(hh)&&Number.isFinite(mm)) target.value=[Math.min(23,hh),Math.min(59,mm),0].map(n=>String(n).padStart(2,'0')).join(':');} } }
-      } else {
-        const normalized=spoken.replace(/virgule/g,' ').replace(/,/g,' ').replace(/\bx\b/g,''); let value=Number(normalized.replace(/[^\d.]/g,'')); if(!Number.isFinite(value)||value===0){const parts=spoken.split(/\s+virgule\s+/); if(parts.length===2){const whole=frenchNumber(parts[0]), decimal=frenchNumber(parts[1]); value=Number.isFinite(whole)&&Number.isFinite(decimal)?Number(`${whole}.${String(decimal).replace(/\D/g,'')}`):NaN;} else value=frenchNumber(spoken);} if(Number.isFinite(value)&&value>0) target.value=String(value);
+      const alternatives = Array.from(event.results?.[0] || []).map(item => String(item.transcript || '').trim());
+      let assigned = false;
+      for (const spoken of alternatives) {
+        if (target.type === 'time') {
+          const parts = parseTimeSpeech(spoken);
+          if (parts && parts.every(Number.isFinite) && parts[0] >= 0 && parts[0] <= 23 && parts[1] >= 0 && parts[1] <= 59 && parts[2] >= 0 && parts[2] <= 59) {
+            target.value = parts.map(n=>String(Math.trunc(n)).padStart(2,'0')).join(':'); assigned = true; break;
+          }
+        } else {
+          const value = parseDecimalSpeech(spoken);
+          if (Number.isFinite(value) && value >= 1 && value <= 100000000) { target.value = String(value); assigned = true; break; }
+        }
       }
-      target.dispatchEvent(new Event('input',{bubbles:true})); target.dispatchEvent(new Event('change',{bubbles:true}));
+      const out = surface?.querySelector('.calc-results');
+      if (!assigned && out) out.innerHTML = `<p class="message">Voix entendue mais format non reconnu. Réessayez en disant ${target.type === 'time' ? '« onze heures, vingt-trois minutes, douze secondes » ou « 11, 23, 12 »' : '« huit virgule soixante-huit », « 8 point 68 » ou « 8,68 »'}.</p>`;
+      if (assigned) { target.dispatchEvent(new Event('input',{bubbles:true})); target.dispatchEvent(new Event('change',{bubbles:true})); }
     };
-    recognition.onerror = () => { const out=button.closest('.calculator-surface')?.querySelector('.calc-results'); if(out) out.innerHTML='<p class="message">Saisie vocale interrompue. Vérifiez l’autorisation du microphone et réessayez.</p>'; };
-    recognition.onend = () => { button.classList.remove('listening'); button.disabled=false; };
-    try { recognition.start(); } catch (_) { button.classList.remove('listening'); button.disabled=false; }
+    recognition.onerror = () => { const out=surface?.querySelector('.calc-results'); if(out) out.innerHTML='<p class="message">Saisie vocale interrompue. Vérifiez l’autorisation du microphone et la langue choisie, puis réessayez.</p>'; };
+    recognition.onend = () => { button.classList.remove('listening'); button.disabled = false; };
+    try { recognition.start(); } catch (_) { button.classList.remove('listening'); button.disabled = false; }
   }));
+
+  const premiumActivateInfo = $('premiumActivateInfo');
+  if (premiumActivateInfo) premiumActivateInfo.addEventListener('click', () => {
+    const message = $('premiumActivateMessage');
+    if (message) message.textContent = 'Interface d’offre prête côté visuel. Pour encaisser réellement, connectez un prestataire de paiement et configurez la validation des abonnements côté serveur avant de donner accès payant.';
+  });
 
   // Reduce casual copying of page text while preserving normal form-field editing.
   document.addEventListener('copy', e => { if (!e.target.closest('input,textarea,[contenteditable="true"]')) e.preventDefault(); });
