@@ -332,18 +332,19 @@
   }
   async function loadPremiumAccess() {
     const panel = $('premiumCalculator');
+    const gate = $('premiumAccessGate');
     const lock = $('premiumLocked');
     const message = $('premiumLockMessage');
-    const check = $('premiumCheckAccess');
     const run = $('premiumRun');
-    if (!panel || !lock) return false;
+    if (!panel || !gate || !lock) return false;
     state.premiumAccess = false;
     state.premiumAccessLoading = true;
-    panel.classList.add('premium-locked');
+    panel.classList.add('hide');
+    gate.classList.remove('hide');
     if (run) run.disabled = true;
     if (message) message.textContent = 'Vérification sécurisée de votre statut Premium…';
     if (!db || !state.user) {
-      if (message) message.textContent = 'Midira amin’ny kaontinao aloha, avy eo hamarino ny fidirana Premium.';
+      if (message) message.textContent = 'Connectez-vous à votre compte, puis vérifiez si votre accès Premium est actif.';
       state.premiumAccessLoading = false;
       return false;
     }
@@ -354,21 +355,21 @@
       const expires = data?.expires_at ? new Date(data.expires_at).getTime() : null;
       state.premiumAccess = !!data && data.status === 'active' && (expires === null || (Number.isFinite(expires) && expires > Date.now()));
       if (state.premiumAccess) {
-        panel.classList.remove('premium-locked');
+        panel.classList.remove('hide', 'premium-locked');
+        gate.classList.add('hide');
         if (message) message.textContent = 'Accès confirmé. Votre espace Premium est déverrouillé.';
-        lock.classList.add('hide');
         if (run) run.disabled = false;
       } else {
-        panel.classList.add('premium-locked');
-        lock.classList.remove('hide');
-        if (message) message.textContent = data?.status === 'active' ? 'Votre accès Premium a expiré. Contactez le responsable pour le renouveler.' : 'Votre compte ne possède pas encore d’accès Premium actif. Le calculateur reste verrouillé.';
+        panel.classList.add('hide');
+        gate.classList.remove('hide');
+        if (message) message.textContent = data?.status === 'active' ? 'Votre accès Premium a expiré. Contactez le responsable pour le renouveler.' : 'Votre compte ne possède pas encore d’accès Premium actif. Le calculateur Premium n’est pas affiché.';
         if (run) run.disabled = true;
       }
     } catch (error) {
       state.premiumAccess = false;
-      panel.classList.add('premium-locked');
-      lock.classList.remove('hide');
-      if (message) message.textContent = 'Impossible de valider l’accès Premium. Le calculateur reste verrouillé. La table premium_subscriptions doit être installée dans Supabase.';
+      panel.classList.add('hide');
+      gate.classList.remove('hide');
+      if (message) message.textContent = 'Impossible de valider l’accès Premium. Le calculateur reste masqué. Vérifiez que la table premium_subscriptions est installée dans Supabase.';
       if (run) run.disabled = true;
       console.warn('StratX Premium access check:', error);
     } finally {
@@ -509,7 +510,6 @@
   };
   document.querySelectorAll('[data-voice-target]').forEach(button => button.addEventListener('click', () => {
     const target = $(button.dataset.voiceTarget);
-    if ((target?.id === 'premiumTime' || target?.id === 'premiumCoeff') && !state.premiumAccess) { loadPremiumAccess(); const lockMessage=$('premiumLockMessage'); if(lockMessage) lockMessage.textContent='La saisie vocale Premium est réservée aux comptes ayant un accès actif.'; return; }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!target) return;
     if (!SpeechRecognition) {
@@ -583,7 +583,7 @@
     try {
       const { data, error } = await db.auth.getSession(); if(error) throw error; state.user=data.session?.user || null; authUI();
       if(state.user) { setStatus('Connecté'); await refresh(); await loadPremiumAccess(); syncRouteFromUrl(); } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
-      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide'); history.replaceState({}, '', '/mot-de-passe-oublie'); setAuthFlow('updatePassword'); msg('authmsg', 'Lien vérifié. Choisissez maintenant un nouveau mot de passe.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; } });
+      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide'); history.replaceState({}, '', '/mot-de-passe-oublie'); setAuthFlow('updatePassword'); msg('authmsg', 'Lien vérifié. Choisissez maintenant un nouveau mot de passe.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; loadPremiumAccess(); } });
     } catch(error) { setStatus('Erreur de connexion',false); msg('authmsg',friendlyError(error),true); console.error('StratX auth init:',error); }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

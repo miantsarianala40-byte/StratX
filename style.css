@@ -183,3 +183,9 @@ button:disabled{cursor:not-allowed!important;opacity:.48;filter:saturate(.5)}
 .premium-calculator .premium-lock-panel.hide{display:none!important}
 .voice-success{margin:0;padding:11px 13px;border:1px solid #478c6b;border-radius:10px;background:#1c493323;color:#a7edc7;font-size:12px}
 @media(max-width:520px){.premium-lock-panel{align-items:flex-start;gap:12px;padding:17px}.premium-lock-icon{flex-basis:44px;width:44px;height:44px;font-size:21px;border-radius:13px}}
+
+/* Premium access gating: show only the access notice until the subscription is active. */
+.premium-access-gate{margin:18px 0;padding:22px;border-color:#6c572f;background:radial-gradient(ellipse at 0 0,#332717,transparent 62%),linear-gradient(145deg,#151820,#0d1015)}
+.premium-access-gate .premium-lock-panel{display:flex;align-items:center;gap:18px}
+.premium-access-gate .premium-lock-panel p{color:var(--muted);margin:7px 0 12px}
+.premium-calculator.hide{display:none!important}
