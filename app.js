@@ -334,9 +334,20 @@
   async function loadPremiumPaymentRequests() {
     const panel = $('premiumAdminPanel'); const list = $('premiumAdminRequests');
     if (!panel || !list || !isPremiumAdmin()) return;
-    panel.classList.remove('hide'); list.textContent = 'Chargement des demandes…';
+    panel.classList.remove('hide');
+    $('premiumAdminDashboard')?.classList.remove('hide');
+    list.textContent = 'Chargement des demandes…';
     try {
-      const { data, error } = await db.from('premium_payment_requests').select('id,user_id,payment_method,transaction_ref,amount_ariary,note,status,created_at').eq('status','pending').order('created_at',{ascending:true});
+      const [pendingResult, activeResult, expiredResult] = await Promise.all([
+        db.from('premium_payment_requests').select('id,user_id,payment_method,transaction_ref,amount_ariary,note,status,created_at,duration_days,plan_code').eq('status','pending').order('created_at',{ascending:true}),
+        db.from('premium_subscriptions').select('user_id',{count:'exact',head:true}).eq('status','active').gt('expires_at',new Date().toISOString()),
+        db.from('premium_subscriptions').select('user_id',{count:'exact',head:true}).or(`status.eq.expired,expires_at.lte.${new Date().toISOString()}`)
+      ]);
+      const data = pendingResult.data;
+      const error = pendingResult.error || activeResult.error || expiredResult.error;
+      if ($('premiumPendingCount')) $('premiumPendingCount').textContent = pendingResult.count ?? data?.length ?? '—';
+      if ($('premiumActiveCount')) $('premiumActiveCount').textContent = activeResult.count ?? '—';
+      if ($('premiumExpiredCount')) $('premiumExpiredCount').textContent = expiredResult.count ?? '—';
       if (error) throw error;
       list.replaceChildren();
       if (!data?.length) { list.textContent = 'Aucune demande en attente.'; return; }
@@ -344,12 +355,13 @@
         const card = document.createElement('article'); card.className = 'premium-admin-request';
         const details = document.createElement('div');
         const title = document.createElement('h4'); title.textContent = `${req.payment_method} · ${Number(req.amount_ariary).toLocaleString('fr-FR')} Ar`;
+        const plan = document.createElement('p'); plan.textContent = `Formule demandée : ${Number(req.duration_days || 30)} jours (${req.plan_code || 'monthly'})`; 
         const body = document.createElement('p'); body.textContent = `Réf. : ${req.transaction_ref} · User ID : ${req.user_id}`;
         const note = document.createElement('small'); note.textContent = req.note || 'Aucune note';
         const date = document.createElement('small'); date.textContent = `Envoyée le ${formatDate(req.created_at)}`;
-        details.append(title,body,note,date);
+        details.append(title,plan,body,note,date);
         const actions = document.createElement('div'); actions.className='premium-admin-actions';
-        const approve = document.createElement('button'); approve.type='button'; approve.className='btn btn-primary'; approve.textContent='Paiement vérifié · Activer 30 jours';
+        const approve = document.createElement('button'); approve.type='button'; approve.className='btn btn-primary'; approve.textContent=`Paiement vérifié · Activer ${Number(req.duration_days || 30)} jours`;
         approve.addEventListener('click',()=>reviewPremiumRequest(req,'approved'));
         const reject = document.createElement('button'); reject.type='button'; reject.className='btn btn-outline'; reject.textContent='Refuser'; reject.addEventListener('click',()=>reviewPremiumRequest(req,'rejected'));
         actions.append(approve,reject); card.append(details,actions); list.append(card);
@@ -359,15 +371,21 @@
   async function reviewPremiumRequest(req, decision) {
     if (!isPremiumAdmin() || !db) return;
     const statusMsg = $('premiumAdminMessage');
-    if (decision === 'approved' && !confirm(`Confirmez-vous avoir vérifié le paiement ${req.transaction_ref} de ${Number(req.amount_ariary).toLocaleString('fr-FR')} Ar ? Cela activera 30 jours de Premium.`)) return;
+    if (decision === 'approved' && !confirm(`Confirmez-vous avoir vérifié le paiement ${req.transaction_ref} de ${Number(req.amount_ariary).toLocaleString('fr-FR')} Ar ? Cela activera ${Number(req.duration_days || 30)} jours de Premium.`)) return;
     try {
       if (decision === 'approved') {
-        const { error: subError } = await db.from('premium_subscriptions').upsert({user_id:req.user_id,status:'active',expires_at:new Date(Date.now()+30*24*60*60*1000).toISOString(),updated_at:new Date().toISOString()},{onConflict:'user_id'});
+        const { data: existing, error: existingError } = await db.from('premium_subscriptions').select('expires_at').eq('user_id',req.user_id).maybeSingle();
+        if (existingError) throw existingError;
+        const now = Date.now();
+        const existingExpiry = existing?.expires_at ? new Date(existing.expires_at).getTime() : 0;
+        const base = Number.isFinite(existingExpiry) && existingExpiry > now ? existingExpiry : now;
+        const days = Math.max(1, Math.min(365, Number(req.duration_days || 30)));
+        const { error: subError } = await db.from('premium_subscriptions').upsert({user_id:req.user_id,status:'active',expires_at:new Date(base+days*24*60*60*1000).toISOString(),updated_at:new Date().toISOString()},{onConflict:'user_id'});
         if (subError) throw subError;
       }
       const { error } = await db.from('premium_payment_requests').update({status:decision,reviewed_at:new Date().toISOString(),reviewed_by:state.user.id}).eq('id',req.id).eq('status','pending');
       if (error) throw error;
-      if (statusMsg) statusMsg.textContent = decision === 'approved' ? 'Paiement validé : accès Premium activé pour 30 jours.' : 'Demande refusée.';
+      if (statusMsg) statusMsg.textContent = decision === 'approved' ? `Paiement validé : accès Premium activé pour ${Number(req.duration_days || 30)} jours.` : 'Demande refusée.';
       await loadPremiumPaymentRequests();
       if (req.user_id === state.user.id) await loadPremiumAccess();
     } catch (error) { if(statusMsg) statusMsg.textContent = `Erreur : ${friendlyError(error)}`; }
@@ -401,11 +419,21 @@
       return false;
     }
     try {
-      // Access is granted only by a server-managed subscription row; client profile metadata is not trusted.
+      // Admin is identified only by trusted Supabase app_metadata, never editable user_metadata.
+      if (isPremiumAdmin()) {
+        state.premiumAccess = true;
+        panel.classList.remove('hide', 'premium-locked');
+        gate.classList.add('hide');
+        if (message) message.textContent = 'Accès administrateur illimité activé.';
+        if (run) run.disabled = false;
+        const adminDashboard = $('premiumAdminDashboard');
+        if (adminDashboard) adminDashboard.classList.remove('hide');
+      } else {
+      // Regular access is granted only by a server-managed subscription row.
       const { data, error } = await db.from('premium_subscriptions').select('status,expires_at').eq('user_id', state.user.id).maybeSingle();
       if (error) throw error;
       const expires = data?.expires_at ? new Date(data.expires_at).getTime() : null;
-      state.premiumAccess = !!data && data.status === 'active' && (expires === null || (Number.isFinite(expires) && expires > Date.now()));
+      state.premiumAccess = !!data && data.status === 'active' && Number.isFinite(expires) && expires > Date.now();
       if (state.premiumAccess) {
         panel.classList.remove('hide', 'premium-locked');
         gate.classList.add('hide');
@@ -416,6 +444,7 @@
         gate.classList.remove('hide');
         if (message) message.textContent = data?.status === 'active' ? 'Votre accès Premium a expiré. Contactez le responsable pour le renouveler.' : 'Votre compte ne possède pas encore d’accès Premium actif. Le calculateur Premium n’est pas affiché.';
         if (run) run.disabled = true;
+      }
       }
     } catch (error) {
       state.premiumAccess = false;
@@ -475,8 +504,8 @@
       if(!rule){out.innerHTML='<p class="message">Saisissez un coefficient valide supérieur ou égal à 1.00x.</p>';return;}
       const total=(Number(clock.slice(0,2)||0)*3600+Number(clock.slice(3,5)||0)*60+Number(clock.slice(6,8)||0)+rule.m*60+rule.s)%86400;
       const time=[Math.floor(total/3600),Math.floor(total%3600/60),total%60].map(n=>String(n).padStart(2,'0')).join(':');
-      const value=(rule.a+rng()*(rule.b-rule.a)).toFixed(2), stability=Math.floor(35+rng()*46), risk=Math.floor(35+rng()*46), index=Math.floor(35+rng()*46);
-      out.innerHTML=`<article class="calc-row calc-row-premium"><div class="calc-result-main"><small class="eyebrow">SCÉNARIO SIMULÉ · PREMIUM</small><h3>${time} <span>·</span> ${value}x</h3><p>Scénario illustratif, sans garantie sur le jeu réel</p></div><div class="calc-metrics"><span><small>Stabilité*</small><b>${stability}%</b></span><span><small>Risque*</small><b>${risk}%</b></span><span><small>Indice*</small><b>${index}%</b></span></div></article><p class="subtle">Même heure et coefficient = même sortie affichée. Les indicateurs sont illustratifs et non validés statistiquement.</p>`;
+      const value=(rule.a+rng()*(rule.b-rule.a)).toFixed(2);
+      out.innerHTML=`<article class="calc-row calc-row-premium"><div class="calc-result-main"><small class="eyebrow">SCÉNARIO THÉORIQUE · PREMIUM</small><h3>${time} <span>·</span> ${value}x</h3><p>Exemple généré par le modèle local, pas une prédiction d’un tour réel.</p></div><div class="calc-metrics"><span><small>Données live</small><b>Non</b></span><span><small>Validation historique</small><b>Non</b></span><span><small>Garantie</small><b>Aucune</b></span></div></article><p class="subtle">Transparence : ce calculateur ne reçoit pas les données internes des jeux et n’a pas été validé pour prédire les coefficients futurs. Le résultat ne constitue pas un conseil de mise ni une garantie de gain.</p>`;
     });
 
   // Multilingual voice entry. Actual language support depends on the browser speech service.
@@ -638,6 +667,39 @@
     if (card) card.classList.toggle('payment-destination-other', !destination.number);
     if (copy) { copy.disabled = !destination.number; copy.textContent = 'Copier le numéro'; }
   }
+  // Prix globaux stables par fenêtre de 3 jours : ils ne changent pas à chaque calcul ni à chaque seconde.
+  // Les montants restent dans les plages définies par l'administrateur et sont indicatifs côté client;
+  // le contrôle serveur/Supabase doit être aligné avant la mise en production.
+  const PRICE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+  function priceWindow() { return Math.floor(Date.now() / PRICE_WINDOW_MS); }
+  function priceForDuration(days, windowId = priceWindow()) {
+    const d = Math.max(1, Math.min(365, Math.floor(Number(days) || 1)));
+    const rand = deterministicRandom(`stratx-premium-price-v1|${windowId}`);
+    const p7 = 6500 + Math.floor(rand() * 2001); // 6 500–8 500 Ar
+    const p30 = 25000 + Math.floor(rand() * 10001); // 25 000–35 000 Ar
+    let amount;
+    if (d <= 6) amount = 3000 + ((d - 1) / 6) * (p7 - 3000);
+    else if (d === 7) amount = p7;
+    else if (d <= 30) amount = p7 + ((d - 7) / 23) * (p30 - p7);
+    else amount = p30 * (d / 30);
+    return { days:d, amount:Math.round(amount), p7, p30, windowId, nextChange:new Date((windowId + 1) * PRICE_WINDOW_MS) };
+  }
+  function updatePremiumPlan() {
+    const input = $('premiumDurationDays');
+    if (!input) return;
+    const raw = Number(input.value);
+    const days = Math.max(1, Math.min(365, Math.floor(Number.isFinite(raw) && raw ? raw : 30)));
+    if (String(days) !== input.value) input.value = String(days);
+    const plan = priceForDuration(days);
+    const amount = $('premiumPaymentAmount'); if (amount) amount.value = String(plan.amount);
+    const note = $('premiumPlanNote');
+    if (note) note.textContent = `${days} jour${days > 1 ? 's' : ''} d’accès · ${plan.amount.toLocaleString('fr-FR')} Ar · activation après validation manuelle`;
+    const stability = $('premiumPriceStability');
+    if (stability) stability.textContent = `Tarif stable jusqu’au ${plan.nextChange.toLocaleString('fr-FR', {dateStyle:'medium',timeStyle:'short'})}. Plages : 7 jours ${plan.p7.toLocaleString('fr-FR')} Ar · 30 jours ${plan.p30.toLocaleString('fr-FR')} Ar.`;
+  }
+  $('premiumDurationDays')?.addEventListener('input', updatePremiumPlan);
+  $('premiumDurationDays')?.addEventListener('change', updatePremiumPlan);
+  updatePremiumPlan();
   $('premiumPaymentMethod')?.addEventListener('change', updatePaymentDestination);
   $('copyPaymentNumber')?.addEventListener('click', async () => {
     const number = $('paymentDestinationNumber')?.textContent?.trim();
@@ -659,8 +721,10 @@
     if (!db || !state.user) { msg('premiumRequestMessage','Connectez-vous avant d’envoyer une demande.',true); return; }
     const button = $('premiumRequestSubmit'); button.disabled = true;
     try {
-      const payload = {user_id:state.user.id,payment_method:$('premiumPaymentMethod').value,transaction_ref:$('premiumPaymentRef').value.trim(),amount_ariary:Number($('premiumPaymentAmount').value),note:$('premiumPaymentNote').value.trim(),status:'pending'};
-      if (!payload.transaction_ref || !Number.isFinite(payload.amount_ariary) || payload.amount_ariary <= 0) throw new Error('Saisissez une référence et un montant valides.');
+      const durationDays = Math.max(1, Math.min(365, Math.floor(Number($('premiumDurationDays')?.value || 30))));
+      const selectedPlan = priceForDuration(durationDays);
+      const payload = {user_id:state.user.id,payment_method:$('premiumPaymentMethod').value,transaction_ref:$('premiumPaymentRef').value.trim(),amount_ariary:Number($('premiumPaymentAmount').value),note:$('premiumPaymentNote').value.trim(),plan_code:`custom_${durationDays}d`,duration_days:durationDays,status:'pending'};
+      if (!payload.transaction_ref || !Number.isFinite(payload.amount_ariary) || payload.amount_ariary !== selectedPlan.amount) throw new Error(`Le montant attendu pour ${durationDays} jours est ${selectedPlan.amount.toLocaleString('fr-FR')} Ar. Actualisez le tarif avant d’envoyer la demande.`);
       const {error} = await db.from('premium_payment_requests').insert(payload);
       if (error) throw error;
       $('premiumRequestForm').reset();

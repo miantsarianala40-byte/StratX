@@ -24,3 +24,16 @@ SÉCURITÉ
 - N'exigez jamais de code PIN, mot de passe ou code OTP du client.
 - Une référence saisie par l'utilisateur n'est pas une preuve suffisante en soi.
 - Le flux est une validation manuelle, pas un paiement automatisé ni une vérification bancaire automatique.
+
+
+OFFRES PREMIUM PAR DÉFAUT
+- 7 jours : 2 000 Ar
+- 30 jours : 5 000 Ar
+- 90 jours : 12 000 Ar
+Ces tarifs sont des valeurs initiales modifiables dans app.js (premiumPlans). L’accès expire selon expires_at. Les renouvellements ajoutent la durée à l’échéance existante si elle est encore active.
+
+ADMINISTRATEUR
+Le compte dont auth.users.raw_app_meta_data.role vaut "admin" a un accès Premium illimité sans ligne d’abonnement. Le tableau de bord affiche les demandes en attente, les abonnements actifs et les accès expirés. Les politiques RLS restent activées.
+
+IMPORTANT
+Les scénarios Aviator/JetX/CosmoX affichés par ce projet sont des simulations illustratives, pas des prédictions fiables ou garanties. Ne pas vendre un résultat comme certain.

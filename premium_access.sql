@@ -21,6 +21,8 @@ create table if not exists public.premium_payment_requests (
   payment_method text not null check (payment_method in ('MVola','Orange Money','Airtel Money','Transfert bancaire / autre')),
   transaction_ref text not null,
   amount_ariary numeric(12,0) not null check (amount_ariary > 0),
+  plan_code text not null default 'custom_30d',
+  duration_days integer not null default 30 check (duration_days between 1 and 365),
   note text not null default '',
   status text not null default 'pending' check (status in ('pending','approved','rejected')),
   admin_note text not null default '',
@@ -40,3 +42,16 @@ using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
 with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 -- Admins must be assigned app_metadata.role = 'admin' by a trusted Supabase administrator.
 -- Never set admin role from client-side code or user-editable user_metadata.
+
+-- Migration idempotente pour les projets déjà installés.
+alter table public.premium_payment_requests add column if not exists plan_code text not null default 'monthly';
+alter table public.premium_payment_requests add column if not exists duration_days integer not null default 30;
+alter table public.premium_payment_requests drop constraint if exists premium_payment_requests_duration_days_check;
+alter table public.premium_payment_requests add constraint premium_payment_requests_duration_days_check check (duration_days between 1 and 365);
+alter table public.premium_payment_requests drop constraint if exists premium_payment_requests_plan_code_check;
+-- plan_code is intentionally flexible (e.g. custom_12d) for arbitrary durations.
+update public.premium_payment_requests set plan_code = 'custom_' || duration_days::text || 'd' where plan_code is null or plan_code in ('weekly','monthly','quarterly');
+grant select on public.premium_subscriptions to authenticated;
+grant insert, select on public.premium_payment_requests to authenticated;
+grant update, select on public.premium_payment_requests to authenticated;
+grant usage, select on sequence public.premium_payment_requests_id_seq to authenticated;
