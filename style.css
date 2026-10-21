@@ -41,3 +41,6 @@ button:disabled{cursor:not-allowed!important;opacity:.48;filter:saturate(.5)}
 
 #home>.stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media(max-width:620px){#home>.stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* StratX calculator additions */
+.calculator-surface{margin:22px 0}.calc-results{display:grid;gap:10px;margin-top:18px}.calc-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:14px;border:1px solid var(--line,rgba(255,255,255,.1));border-radius:12px;background:rgba(255,255,255,.025);flex-wrap:wrap}.calc-row strong{font-family:inherit}.calc-metrics{display:flex;gap:8px;flex-wrap:wrap}.calc-metrics span{font-size:.78rem;padding:5px 8px;border-radius:7px;background:rgba(255,255,255,.06)}.guide-ad-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:24px;margin:22px 0}.guide-ad-grid li{margin:8px 0;color:var(--muted,#a9a9b4)}.ad-placeholder{border:1px dashed rgba(220,180,95,.45);border-radius:12px;padding:20px;align-self:stretch}.ad-placeholder h3{margin:12px 0}.ad-placeholder p{color:var(--muted,#a9a9b4)}@media(max-width:700px){.guide-ad-grid{grid-template-columns:1fr}}

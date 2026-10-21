@@ -324,9 +324,25 @@
     $('requestDeleteAccount')?.addEventListener('click', async()=>{if(!state.user||!db)return;if(!confirm('Envoyer une demande de suppression de compte ? Le compte ne sera pas supprimé automatiquement.'))return;const b=$('requestDeleteAccount');b.disabled=true;try{const {error}=await db.from('account_deletion_requests').insert({user_id:state.user.id,email:state.user.email,status:'pending'});if(error)throw error;msg('deleteAccountMsg','Demande enregistrée. Une validation e-mail et une suppression côté serveur restent nécessaires avant toute suppression définitive.');}catch(error){msg('deleteAccountMsg',friendlyError(error),true);}finally{b.disabled=false;}});
     $('copyId').addEventListener('click', async () => { const id=state.user?.id; if(!id) return; try { await navigator.clipboard.writeText(id); $('copyId').textContent='Copié ✓'; setTimeout(()=>$('copyId').textContent='Copier',1600); } catch { msg('profilemsg','Impossible de copier automatiquement. Sélectionnez l’identifiant pour le copier.'); } });
   }
+  function bindCalculator() {
+    const button = $('runCalc'); if (!button) return;
+    const addSeconds = (clock, seconds) => { const parts = clock.split(':').map(Number); let total=(parts[0]||0)*3600+(parts[1]||0)*60+(parts[2]||0)+seconds; total=((total%86400)+86400)%86400; return [Math.floor(total/3600),Math.floor(total%3600/60),total%60].map(n=>String(n).padStart(2,'0')).join(':'); };
+    const row = (time, low, high) => { const coefficient = low + Math.random()*(high-low); return {time, coefficient: coefficient.toFixed(2)}; };
+    button.addEventListener('click', () => {
+      const game=$('calcGame').value, clock=$('calcTime').value || '12:00:00', coeff=Number($('calcCoeff').value), out=$('calcResults');
+      if (!Number.isFinite(coeff) || coeff < 1) { out.innerHTML='<p class="message">Saisissez un coefficient valide supérieur ou égal à 1.00x.</p>'; return; }
+      let rules=[];
+      if(game==='Aviator') { if(coeff>=2 && coeff<5) rules=[{m:2,s:18,a:2.5,b:4.99},{m:4,s:26,a:2.5,b:4.99}]; else if(coeff>=5 && coeff<=50) rules=[{m:3,s:29,a:3,b:9.99},{m:4,s:45,a:2.5,b:5},{m:5,s:20,a:5,b:15}]; }
+      if(game==='JetX') { let m=coeff<2?1:coeff<3?2:coeff<4?3:coeff<5?4:3; let range=coeff<2?[1.2,2.1]:coeff<3?[1.7,2.9]:coeff<4?[2.2,3.5]:coeff<5?[3.1,4.9]:[2.5,10]; rules=[{m,s:Math.floor(Math.random()*60),a:range[0],b:range[1]}]; }
+      if(game==='CosmoX') { if(coeff>=3 && coeff<5) rules=[{m:1,s:57,a:2.5,b:5}]; else if(coeff>=5 && coeff<=10) rules=[{m:1,s:48,a:3.5,b:8},{m:3,s:5,a:3.5,b:20}]; }
+      if(game==='Premium') { if(coeff>=5 && coeff<10) rules=[{m:4,s:8,a:4,b:20}]; else if(coeff>=10 && coeff<=50) rules=[{m:8,s:38,a:3,b:15}]; else if(coeff>50) { const m=[3,5,7,9][Math.floor(Math.random()*4)]; rules=[{m,s:22,a:4.5,b:40}]; } }
+      if(!rules.length) { out.innerHTML='<p class="message">Aucun scénario défini pour ce coefficient dans ce mode.</p>'; return; }
+      out.innerHTML=rules.map(r=>{const result=row(addSeconds(clock,r.m*60+r.s),r.a,r.b);const indices=()=>Math.floor(35+Math.random()*46);return `<div class="calc-row"><div><small class="eyebrow">SCÉNARIO SIMULÉ</small><h3>${result.time} · ${result.coefficient}x</h3></div><div class="calc-metrics"><span>Stabilité ${indices()}%</span><span>Risque ${indices()}%</span><span>Fiabilité ${indices()}%</span></div></div>`}).join('')+'<p class="subtle">Simulation aléatoire de démonstration. Les indices sont illustratifs, non calibrés et ne représentent pas une confiance statistiquement vérifiée.</p>';
+    });
+  }
   function initDate() { say('todayDate', new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})); const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); const local=now.toISOString().slice(0,16); if($('observedAt')) $('observedAt').value=local; }
   async function init() {
-    bind(); initDate();
+    bind(); bindCalculator(); initDate();
     window.addEventListener('popstate', syncRouteFromUrl);
     if (!db) { setStatus('Supabase indisponible',false); msg('authmsg','Impossible de charger Supabase. Vérifiez la connexion Internet ou la configuration de la bibliothèque.',true); return; }
     try {
