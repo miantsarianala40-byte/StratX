@@ -69,13 +69,13 @@
     const fixed = {
       '/': { page: 'home' }, '/accueil': { page: 'home' }, '/connexion': { page: 'auth' },
       '/inscription': { page: 'auth', authMode: 'signup' }, '/mot-de-passe-oublie': { page: 'auth', authMode: 'reset' },
-      '/jeux': { page: 'games' }, '/communaute': { page: 'community' }, '/profil': { page: 'profile' }, '/premium': { page: 'premium' }, '/a-propos': { page: 'about' }
+      '/jeux': { page: 'games' }, '/communaute': { page: 'community' }, '/profil': { page: 'profile' }, '/premium': { page: 'premium' }, '/notifications': { page: 'notifications' }, '/a-propos': { page: 'about' }
     };
     return { ...(fixed[path] || fixed['/']), path };
   }
   function routeForCurrentPage(id) {
     if (id === 'games') return `/${state.activeGame.toLowerCase()}${state.gameSection && state.gameSection !== 'overview' ? '/' + state.gameSection : ''}`;
-    return ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil', premium: '/premium', about: '/a-propos' })[id] || '/accueil';
+    return ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil', premium: '/premium', notifications: '/notifications', about: '/a-propos' })[id] || '/accueil';
   }
   function syncRouteFromUrl() {
     const route = parseRoute();
@@ -103,6 +103,7 @@
     if (id === 'games') renderGame();
     if (id === 'profile') authUI();
     if (id === 'premium') loadPremiumAccess();
+    if (id === 'notifications') loadNotifications();
     if (updateUrl) history.pushState({}, '', routeForCurrentPage(id));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -421,6 +422,9 @@
     try {
       // Admin is identified only by trusted Supabase app_metadata, never editable user_metadata.
       if (isPremiumAdmin()) {
+        $('premiumOfferCard')?.classList.add('hide');
+        $('premiumRequestForm')?.classList.add('hide');
+        $('premiumMemberDashboard')?.classList.add('hide');
         state.premiumAccess = true;
         panel.classList.remove('hide', 'premium-locked');
         gate.classList.add('hide');
@@ -429,11 +433,22 @@
         const adminDashboard = $('premiumAdminDashboard');
         if (adminDashboard) adminDashboard.classList.remove('hide');
       } else {
+      $('premiumOfferCard')?.classList.remove('hide');
+      $('premiumRequestForm')?.classList.remove('hide');
+      $('premiumMemberDashboard')?.classList.remove('hide');
       // Regular access is granted only by a server-managed subscription row.
       const { data, error } = await db.from('premium_subscriptions').select('status,expires_at').eq('user_id', state.user.id).maybeSingle();
       if (error) throw error;
       const expires = data?.expires_at ? new Date(data.expires_at).getTime() : null;
       state.premiumAccess = !!data && data.status === 'active' && Number.isFinite(expires) && expires > Date.now();
+      const memberDash = $('premiumMemberDashboard'); if (memberDash) memberDash.classList.remove('hide');
+      const remaining = state.premiumAccess ? Math.max(0, Math.ceil((expires-Date.now())/(24*60*60*1000))) : 0;
+      say('memberPremiumState', state.premiumAccess ? 'ACTIF' : (data?.status === 'active' ? 'EXPIRÉ' : 'INACTIF'));
+      say('memberPremiumDays', String(remaining));
+      say('memberPremiumExpiry', expires ? new Date(expires).toLocaleDateString('fr-FR') : '—');
+      say('memberPremiumBadge', state.premiumAccess ? 'MEMBRE ACTIF' : 'ACCÈS REQUIS');
+      say('memberPremiumStatus', state.premiumAccess ? 'Votre abonnement est actif. Le calculateur Premium est accessible.' : 'Aucun abonnement actif. Envoyez une demande après votre paiement.');
+      await loadMyPremiumRequests();
       if (state.premiumAccess) {
         panel.classList.remove('hide', 'premium-locked');
         gate.classList.add('hide');
@@ -667,6 +682,23 @@
     if (card) card.classList.toggle('payment-destination-other', !destination.number);
     if (copy) { copy.disabled = !destination.number; copy.textContent = 'Copier le numéro'; }
   }
+  async function loadNotifications() {
+    const list = $('notificationList'); if (!list) return;
+    list.replaceChildren();
+    $('notificationAdminComposer')?.classList.toggle('hide', !isPremiumAdmin());
+    if (!db || !state.user) { list.textContent = 'Connectez-vous pour consulter vos notifications.'; return; }
+    try {
+      const { data, error } = await db.from('stratx_announcements').select('id,title,body,created_at').eq('published',true).order('created_at',{ascending:false}).limit(100);
+      if (error) throw error;
+      const notices = data || [];
+      if (!notices.length) { const empty=document.createElement('div');empty.className='empty-state';empty.textContent='Aucune nouvelle notification pour le moment.';list.append(empty); }
+      notices.forEach(n=>{ const card=document.createElement('button');card.type='button';card.className='notification-card';const icon=document.createElement('span');icon.className='notification-card-icon';icon.textContent='✦';const content=document.createElement('div');const title=document.createElement('b');title.textContent=n.title;const body=document.createElement('p');body.textContent=n.body.length>180?n.body.slice(0,180)+'…':n.body;const meta=document.createElement('small');meta.textContent=`Annonce StratX · ${formatDate(n.created_at)}`;content.append(title,body,meta);card.append(icon,content);card.addEventListener('click',()=>{const modal=document.createElement('div');modal.className='notification-reader-backdrop';const box=document.createElement('article');box.className='notification-reader';const close=document.createElement('button');close.className='btn btn-outline';close.type='button';close.textContent='Fermer';const h=document.createElement('h3');h.textContent=n.title;const p=document.createElement('p');p.textContent=n.body;const d=document.createElement('small');d.textContent=formatDate(n.created_at);close.addEventListener('click',()=>modal.remove());box.append(close,h,p,d);modal.append(box);modal.addEventListener('click',e=>{if(e.target===modal)modal.remove()});document.body.append(modal);});list.append(card);});
+      const badge=$('notificationBadge');if(badge){badge.textContent=String(notices.length);badge.classList.toggle('hide',!notices.length);}
+    } catch(error) { const p=document.createElement('p');p.className='message';p.textContent=`Impossible de charger les notifications : ${friendlyError(error)}. Vérifiez premium_access.sql.`;list.append(p); }
+  }
+  $('notificationRefresh')?.addEventListener('click',loadNotifications);
+  $('notificationAdminForm')?.addEventListener('submit',async e=>{e.preventDefault();if(!isPremiumAdmin()||!db||!state.user)return;const title=$('noticeTitle').value.trim(),body=$('noticeBody').value.trim();const button=e.submitter;if(button)button.disabled=true;try{const {error}=await db.from('stratx_announcements').insert({title,body,created_by:state.user.id,published:true});if(error)throw error;$('notificationAdminForm').reset();say('notificationMessage','Annonce publiée. Elle sera visible dans le centre de notifications des membres.');await loadNotifications();}catch(error){say('notificationMessage',`Publication impossible : ${friendlyError(error)}`);}finally{if(button)button.disabled=false;}});
+
   // Prix globaux stables par fenêtre de 3 jours : ils ne changent pas à chaque calcul ni à chaque seconde.
   // Les montants restent dans les plages définies par l'administrateur et sont indicatifs côté client;
   // le contrôle serveur/Supabase doit être aligné avant la mise en production.
@@ -691,6 +723,7 @@
     const days = Math.max(1, Math.min(365, Math.floor(Number.isFinite(raw) && raw ? raw : 30)));
     if (String(days) !== input.value) input.value = String(days);
     const plan = priceForDuration(days);
+    say('premiumDaysValue', String(days));
     const amount = $('premiumPaymentAmount'); if (amount) amount.value = String(plan.amount);
     const note = $('premiumPlanNote');
     if (note) note.textContent = `${days} jour${days > 1 ? 's' : ''} d’accès · ${plan.amount.toLocaleString('fr-FR')} Ar · activation après validation manuelle`;
@@ -727,7 +760,7 @@
       if (!payload.transaction_ref || !Number.isFinite(payload.amount_ariary) || payload.amount_ariary !== selectedPlan.amount) throw new Error(`Le montant attendu pour ${durationDays} jours est ${selectedPlan.amount.toLocaleString('fr-FR')} Ar. Actualisez le tarif avant d’envoyer la demande.`);
       const {error} = await db.from('premium_payment_requests').insert(payload);
       if (error) throw error;
-      $('premiumRequestForm').reset();
+      $('premiumRequestForm').reset(); updatePremiumPlan();
       msg('premiumRequestMessage','Demande envoyée. L’accès sera activé après vérification manuelle du paiement. Ne renvoyez pas plusieurs demandes pour la même transaction.');
       await loadMyPremiumRequests(); await loadPremiumPaymentRequests();
     } catch (error) { msg('premiumRequestMessage',friendlyError(error),true); }
