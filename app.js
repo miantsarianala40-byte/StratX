@@ -10,6 +10,11 @@
     JetX: { desc: 'Un espace dédié pour garder un historique personnel des observations JetX.', logo: 'JX', cls: 'jetx-logo' },
     CosmoX: { desc: 'Centralisez les entrées historiques CosmoX dans un espace séparé.', logo: '✦', cls: 'cosmox-logo' }
   };
+  const deterministicRandom = seedText => {
+    let seed = 2166136261;
+    for (let i = 0; i < seedText.length; i++) { seed ^= seedText.charCodeAt(i); seed = Math.imul(seed, 16777619); }
+    return () => { seed += 0x6D2B79F5; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  };
   const say = (id, value) => { const el = $(id); if (el) el.textContent = value ?? ''; };
   const msg = (id, value, isError = false) => { const el = $(id); if (!el) return; el.textContent = value || ''; el.style.color = isError ? '#ff9b91' : ''; };
   const escapeText = value => String(value ?? '');
@@ -327,11 +332,6 @@
   function bindCalculator() {
     const button = $('runCalc'); if (!button) return;
     const panel = $('calculatorSurface');
-    const deterministicRandom = seedText => {
-      let seed = 2166136261;
-      for (let i = 0; i < seedText.length; i++) { seed ^= seedText.charCodeAt(i); seed = Math.imul(seed, 16777619); }
-      return () => { seed += 0x6D2B79F5; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-    };
     document.querySelectorAll('[data-mode]').forEach(card => card.addEventListener('click', () => {
       const mode = card.dataset.mode;
       $('calcGame').value = mode;
@@ -344,7 +344,8 @@
     }));
     const addSeconds = (clock, seconds) => { const parts = clock.split(':').map(Number); let total=(parts[0]||0)*3600+(parts[1]||0)*60+(parts[2]||0)+seconds; total=((total%86400)+86400)%86400; return [Math.floor(total/3600),Math.floor(total%3600/60),total%60].map(n=>String(n).padStart(2,'0')).join(':'); };
     button.addEventListener('click', () => {
-      const game=$('calcGame').value, clock=$('calcTime').value || '12:00:00', coeff=Number($('calcCoeff').value), out=$('calcResults');
+      const game=$('calcGame').value, clock=$('calcTime').value, coeff=Number($('calcCoeff').value), out=$('calcResults');
+      if (!clock) { out.innerHTML='<p class="message">Saisissez ou dictez l’heure de départ.</p>'; $('calcTime').focus(); return; }
       if (!document.querySelector(`[data-mode="${game}"]`)?.classList.contains('active')) { out.innerHTML='<p class="message">Sélectionnez d’abord Aviator, CosmoX ou JetX.</p>'; return; }
       if (!Number.isFinite(coeff) || coeff < 1) { out.innerHTML='<p class="message">Saisissez un coefficient valide supérieur ou égal à 1.00x.</p>'; return; }
       const rng = deterministicRandom(`${game}|${clock}|${coeff.toFixed(2)}`);
@@ -358,19 +359,59 @@
   }
     const premiumButton = $('premiumRun');
     if (premiumButton) premiumButton.addEventListener('click', () => {
-      const clock=$('premiumTime').value || '12:00:00', coeff=Number($('premiumCoeff').value), out=$('premiumResults');
+      const clock=$('premiumTime').value, coeff=Number($('premiumCoeff').value), out=$('premiumResults');
+      if (!clock) { out.innerHTML='<p class="message">Saisissez ou dictez l’heure de départ.</p>'; $('premiumTime').focus(); return; }
       if (!Number.isFinite(coeff) || coeff < 1) { out.innerHTML='<p class="message">Saisissez un coefficient valide supérieur ou égal à 1.00x.</p>'; return; }
       const rng=deterministicRandom(`Premium|${clock}|${coeff.toFixed(2)}`);
       let rule=null;
-      if(coeff>=5 && coeff<10) rule={m:4,s:8,a:4,b:20};
+      if(coeff>=1 && coeff<5) rule={m:2,s:Math.floor(rng()*60),a:1.2,b:4.99};
+      else if(coeff>=5 && coeff<10) rule={m:4,s:8,a:4,b:20};
       else if(coeff>=10 && coeff<=50) rule={m:8,s:38,a:3,b:15};
       else if(coeff>50) rule={m:[3,5,7,9][Math.floor(rng()*4)],s:22,a:4.5,b:40};
-      if(!rule){out.innerHTML='<p class="message">Aucun scénario Premium défini pour ce coefficient. Les seuils disponibles commencent à 5.00x.</p>';return;}
+      if(!rule){out.innerHTML='<p class="message">Saisissez un coefficient valide supérieur ou égal à 1.00x.</p>';return;}
       const total=(Number(clock.slice(0,2)||0)*3600+Number(clock.slice(3,5)||0)*60+Number(clock.slice(6,8)||0)+rule.m*60+rule.s)%86400;
       const time=[Math.floor(total/3600),Math.floor(total%3600/60),total%60].map(n=>String(n).padStart(2,'0')).join(':');
       const value=(rule.a+rng()*(rule.b-rule.a)).toFixed(2), stability=Math.floor(35+rng()*46), risk=Math.floor(35+rng()*46), index=Math.floor(35+rng()*46);
       out.innerHTML=`<article class="calc-row calc-row-premium"><div class="calc-result-main"><small class="eyebrow">SCÉNARIO SIMULÉ · PREMIUM</small><h3>${time} <span>·</span> ${value}x</h3><p>Scénario illustratif, sans garantie sur le jeu réel</p></div><div class="calc-metrics"><span><small>Stabilité*</small><b>${stability}%</b></span><span><small>Risque*</small><b>${risk}%</b></span><span><small>Indice*</small><b>${index}%</b></span></div></article><p class="subtle">Même heure et coefficient = même sortie affichée. Les indicateurs sont illustratifs et non validés statistiquement.</p>`;
     });
+
+  // Voice entry for time and coefficient (Web Speech API, supported browsers).
+  document.querySelectorAll('[data-voice-target]').forEach(button => button.addEventListener('click', () => {
+    const target = $(button.dataset.voiceTarget);
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!target) return;
+    if (!SpeechRecognition) {
+      const out = button.closest('.calculator-surface')?.querySelector('.calc-results');
+      if (out) out.innerHTML = '<p class="message">La saisie vocale n’est pas prise en charge par ce navigateur. Essayez Chrome et autorisez le microphone.</p>';
+      else alert('La saisie vocale n’est pas prise en charge par ce navigateur. Essayez Chrome et autorisez le microphone.');
+      return;
+    }
+    const recognition = new SpeechRecognition(); recognition.lang = 'fr-FR'; recognition.interimResults = false; recognition.maxAlternatives = 1;
+    button.classList.add('listening'); button.disabled = true;
+    recognition.onresult = event => {
+      const spoken = String(event.results?.[0]?.[0]?.transcript || '').trim().toLowerCase();
+      const frenchNumber = text => {
+        const clean = text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/-/g,' ');
+        const words = {zero:0,un:1,une:1,deux:2,trois:3,quatre:4,cinq:5,six:6,sept:7,huit:8,neuf:9,dix:10,onze:11,douze:12,treize:13,quatorze:14,quinze:15,seize:16,dixsept:17,dixhuit:18,dixneuf:19,vingt:20,trente:30,quarante:40,cinquante:50,soixante:60};
+        const direct = clean.match(/\d+(?:[.,]\d+)?/); if (direct) return Number(direct[0].replace(',','.'));
+        const tokens = clean.split(/\s+/); let total=0, current=0;
+        for (const token of tokens) { if (token==='et' || token==='heure' || token==='heures' || token==='h' || token==='virgule' || token==='point') continue; if (token==='demi') { current+=30; continue; } if (Object.prototype.hasOwnProperty.call(words,token)) { const n=words[token]; current = n>=20 ? current+n : current ? current+n : n; } }
+        return current || total || NaN;
+      };
+      if (target.type === 'time') {
+        const match = spoken.match(/(\d{1,2})\D+(?:heures?|h)\D*(\d{1,2})(?:\D+(\d{1,2}))?/i) || spoken.match(/(\d{1,2})[:h](\d{2})(?:[:h](\d{2}))?/i);
+        if (match) target.value = [Math.min(23,Number(match[1])),Math.min(59,Number(match[2])),Math.min(59,Number(match[3]||0))].map(n=>String(n).padStart(2,'0')).join(':');
+        else { const digits=spoken.match(/\d+/g); if(digits?.length>=2) target.value=[Math.min(23,Number(digits[0])),Math.min(59,Number(digits[1])),Math.min(59,Number(digits[2]||0))].map(n=>String(n).padStart(2,'0')).join(':'); else { const nums=spoken.split(/\s+(?:heures?|h)\s+/); if(nums.length>=2){const hh=frenchNumber(nums[0]), mm=frenchNumber(nums[1]); if(Number.isFinite(hh)&&Number.isFinite(mm)) target.value=[Math.min(23,hh),Math.min(59,mm),0].map(n=>String(n).padStart(2,'0')).join(':');} } }
+      } else {
+        const normalized=spoken.replace(/virgule/g,' ').replace(/,/g,' ').replace(/\bx\b/g,''); let value=Number(normalized.replace(/[^\d.]/g,'')); if(!Number.isFinite(value)||value===0){const parts=spoken.split(/\s+virgule\s+/); if(parts.length===2){const whole=frenchNumber(parts[0]), decimal=frenchNumber(parts[1]); value=Number.isFinite(whole)&&Number.isFinite(decimal)?Number(`${whole}.${String(decimal).replace(/\D/g,'')}`):NaN;} else value=frenchNumber(spoken);} if(Number.isFinite(value)&&value>0) target.value=String(value);
+      }
+      target.dispatchEvent(new Event('input',{bubbles:true})); target.dispatchEvent(new Event('change',{bubbles:true}));
+    };
+    recognition.onerror = () => { const out=button.closest('.calculator-surface')?.querySelector('.calc-results'); if(out) out.innerHTML='<p class="message">Saisie vocale interrompue. Vérifiez l’autorisation du microphone et réessayez.</p>'; };
+    recognition.onend = () => { button.classList.remove('listening'); button.disabled=false; };
+    try { recognition.start(); } catch (_) { button.classList.remove('listening'); button.disabled=false; }
+  }));
+
   // Reduce casual copying of page text while preserving normal form-field editing.
   document.addEventListener('copy', e => { if (!e.target.closest('input,textarea,[contenteditable="true"]')) e.preventDefault(); });
   document.addEventListener('cut', e => { if (!e.target.closest('input,textarea,[contenteditable="true"]')) e.preventDefault(); });
