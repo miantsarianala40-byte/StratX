@@ -1,7 +1,7 @@
 STRATX — ACCÈS PREMIUM PAR VALIDATION MANUELLE
 
 A. INSTALLATION
-- Supabase > SQL Editor : exécuter premium_access.sql (la section Premium est aussi incluse à la fin de schema.sql). Après modification des tables/policies, relancer ce script.
+- Supabase > SQL Editor : exécuter premium_access.sql.
 - Déployer les fichiers du projet sur le dépôt GitHub connecté à Vercel, puis attendre Deployment = Ready.
 
 B. CONFIGURER LE RESPONSABLE
@@ -24,7 +24,3 @@ SÉCURITÉ
 - N'exigez jamais de code PIN, mot de passe ou code OTP du client.
 - Une référence saisie par l'utilisateur n'est pas une preuve suffisante en soi.
 - Le flux est une validation manuelle, pas un paiement automatisé ni une vérification bancaire automatique.
-
-CORRECTION RLS / PRIVILÈGES
-- Les policies RLS ne suffisent pas seules : premium_access.sql accorde aussi les privilèges SQL nécessaires au rôle authenticated.
-- Si l'espace admin affiche encore un refus, lire le message détaillé dans l'interface et vérifier que le compte connecté a app_metadata.role = admin, puis se déconnecter/reconnecter.

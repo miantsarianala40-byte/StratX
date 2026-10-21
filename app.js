@@ -421,7 +421,7 @@
       state.premiumAccess = false;
       panel.classList.add('hide');
       gate.classList.remove('hide');
-      if (message) message.textContent = `Impossible de valider l’accès Premium : ${friendlyError(error)}. Le calculateur reste masqué. Vérifiez les tables, les privilèges et les règles RLS dans Supabase.`;
+      if (message) message.textContent = 'Impossible de valider l’accès Premium. Le calculateur reste masqué. Vérifiez que la table premium_subscriptions est installée dans Supabase.';
       if (run) run.disabled = true;
       console.warn('StratX Premium access check:', error);
     } finally {
@@ -617,6 +617,42 @@
   }));
 
   $('premiumCheckAccess')?.addEventListener('click', () => loadPremiumAccess());
+
+  const paymentDestinations = {
+    'MVola': { number: '+261383955105', label: 'MVola', icon: 'M' },
+    'Airtel Money': { number: '+261336756185', label: 'Airtel Money', icon: 'A' },
+    'Orange Money': { number: '+261379594257', label: 'Orange Money', icon: 'O' },
+    'Transfert bancaire / autre': { number: '', label: 'Autre moyen de paiement', icon: '↗' }
+  };
+  function updatePaymentDestination() {
+    const method = $('premiumPaymentMethod')?.value || 'MVola';
+    const destination = paymentDestinations[method] || paymentDestinations.MVola;
+    const card = $('paymentDestinationCard');
+    const number = $('paymentDestinationNumber');
+    const name = $('paymentDestinationName');
+    const icon = $('paymentDestinationIcon');
+    const copy = $('copyPaymentNumber');
+    if (name) name.textContent = destination.label;
+    if (number) number.textContent = destination.number || 'Contactez l’administrateur';
+    if (icon) icon.textContent = destination.icon;
+    if (card) card.classList.toggle('payment-destination-other', !destination.number);
+    if (copy) { copy.disabled = !destination.number; copy.textContent = 'Copier le numéro'; }
+  }
+  $('premiumPaymentMethod')?.addEventListener('change', updatePaymentDestination);
+  $('copyPaymentNumber')?.addEventListener('click', async () => {
+    const number = $('paymentDestinationNumber')?.textContent?.trim();
+    if (!number || !number.startsWith('+261')) return;
+    try {
+      await navigator.clipboard.writeText(number.replace(/\s/g, ''));
+      $('copyPaymentNumber').textContent = 'Numéro copié ✓';
+    } catch (_) {
+      const field = document.createElement('textarea'); field.value = number.replace(/\s/g, ''); field.setAttribute('readonly',''); field.style.position='fixed'; field.style.opacity='0'; document.body.append(field); field.select();
+      const copied = document.execCommand('copy'); field.remove();
+      $('copyPaymentNumber').textContent = copied ? 'Numéro copié ✓' : 'Copiez manuellement';
+    }
+    window.setTimeout(() => { if ($('copyPaymentNumber')) $('copyPaymentNumber').textContent = 'Copier le numéro'; }, 1800);
+  });
+  updatePaymentDestination();
 
   $('premiumRequestForm')?.addEventListener('submit', async e => {
     e.preventDefault();

@@ -40,9 +40,3 @@ using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
 with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 -- Admins must be assigned app_metadata.role = 'admin' by a trusted Supabase administrator.
 -- Never set admin role from client-side code or user-editable user_metadata.
-
-
--- Explicit table privileges are required in addition to RLS policies.
-grant select on public.premium_subscriptions to authenticated;
-grant select, insert, update on public.premium_payment_requests to authenticated;
-grant usage, select on sequence public.premium_payment_requests_id_seq to authenticated;
