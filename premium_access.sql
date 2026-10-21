@@ -12,6 +12,9 @@ create table if not exists public.premium_subscriptions (
 
 alter table public.premium_subscriptions enable row level security;
 
+-- Explicitly allow authenticated sessions to read only their own row (RLS policy below).
+grant select on public.premium_subscriptions to authenticated;
+
 drop policy if exists "Users can read their own Premium status" on public.premium_subscriptions;
 create policy "Users can read their own Premium status"
   on public.premium_subscriptions

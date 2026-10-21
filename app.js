@@ -369,7 +369,7 @@
       state.premiumAccess = false;
       panel.classList.add('hide');
       gate.classList.remove('hide');
-      if (message) message.textContent = 'Impossible de valider l’accès Premium. Le calculateur reste masqué. Vérifiez que la table premium_subscriptions est installée dans Supabase.';
+      if (message) message.textContent = `Impossible de valider l’accès Premium (${error?.code || 'erreur'}). Vérifiez la table premium_subscriptions, le droit SELECT et la policy RLS dans Supabase, puis réessayez.`;
       if (run) run.disabled = true;
       console.warn('StratX Premium access check:', error);
     } finally {
