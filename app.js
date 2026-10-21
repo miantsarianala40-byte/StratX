@@ -174,7 +174,7 @@
     const name = state.activeGame; const info = gameInfo[name]; if (!info) return;
     say('gamename', name); $('gamename').value = name;
     say('gameBannerTitle', name); say('gameBannerDesc', info.desc); say('historyTitle', `Historique ${name}`);
-    const logo = $('gameBannerLogo'); logo.className = `game-banner-logo ${info.cls}`; logo.textContent = info.logo;
+    const logo = $('gameBannerLogo'); if (logo) { logo.className = `game-banner-logo ${info.cls}`; logo.textContent = info.logo; }
     document.querySelectorAll('.game-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.game === name));
     const rows = state.games.filter(r => r.game_name === name).sort((a,b) => new Date(b.observed_at || b.created_at) - new Date(a.observed_at || a.created_at));
     const vals = rows.map(r => Number(r.multiplier)).filter(v => Number.isFinite(v) && v > 0);
@@ -326,6 +326,14 @@
   }
   function bindCalculator() {
     const button = $('runCalc'); if (!button) return;
+    document.querySelectorAll('[data-mode]').forEach(card => card.addEventListener('click', () => {
+      const mode = card.dataset.mode;
+      $('calcGame').value = mode;
+      document.querySelectorAll('[data-mode]').forEach(item => { const active = item === card; item.classList.toggle('active', active); item.setAttribute('aria-pressed', active ? 'true' : 'false'); });
+      const panel = document.querySelector('.calculator-surface');
+      if (panel) { panel.classList.remove('mode-aviator','mode-jetx','mode-cosmox','mode-premium'); panel.classList.add(`mode-${mode.toLowerCase()}`); }
+      const heading = document.querySelector('.calculator-surface .surface-head h3'); if (heading) heading.textContent = `${mode === 'Premium' ? 'Premium Games' : mode} · Calculateur`;
+    }));
     const addSeconds = (clock, seconds) => { const parts = clock.split(':').map(Number); let total=(parts[0]||0)*3600+(parts[1]||0)*60+(parts[2]||0)+seconds; total=((total%86400)+86400)%86400; return [Math.floor(total/3600),Math.floor(total%3600/60),total%60].map(n=>String(n).padStart(2,'0')).join(':'); };
     const row = (time, low, high) => { const coefficient = low + Math.random()*(high-low); return {time, coefficient: coefficient.toFixed(2)}; };
     button.addEventListener('click', () => {
@@ -337,7 +345,7 @@
       if(game==='CosmoX') { if(coeff>=3 && coeff<5) rules=[{m:1,s:57,a:2.5,b:5}]; else if(coeff>=5 && coeff<=10) rules=[{m:1,s:48,a:3.5,b:8},{m:3,s:5,a:3.5,b:20}]; }
       if(game==='Premium') { if(coeff>=5 && coeff<10) rules=[{m:4,s:8,a:4,b:20}]; else if(coeff>=10 && coeff<=50) rules=[{m:8,s:38,a:3,b:15}]; else if(coeff>50) { const m=[3,5,7,9][Math.floor(Math.random()*4)]; rules=[{m,s:22,a:4.5,b:40}]; } }
       if(!rules.length) { out.innerHTML='<p class="message">Aucun scénario défini pour ce coefficient dans ce mode.</p>'; return; }
-      out.innerHTML=rules.map(r=>{const result=row(addSeconds(clock,r.m*60+r.s),r.a,r.b);const indices=()=>Math.floor(35+Math.random()*46);return `<div class="calc-row"><div><small class="eyebrow">SCÉNARIO SIMULÉ</small><h3>${result.time} · ${result.coefficient}x</h3></div><div class="calc-metrics"><span>Stabilité ${indices()}%</span><span>Risque ${indices()}%</span><span>Fiabilité ${indices()}%</span></div></div>`}).join('')+'<p class="subtle">Simulation aléatoire de démonstration. Les indices sont illustratifs, non calibrés et ne représentent pas une confiance statistiquement vérifiée.</p>';
+      out.innerHTML=rules.map(r=>{const result=row(addSeconds(clock,r.m*60+r.s),r.a,r.b);const indices=()=>Math.floor(35+Math.random()*46);return `<div class="calc-row calc-row-${game.toLowerCase()}"><div><small class="eyebrow">${game==='Premium'?'RÉSULTAT PREMIUM':'SCÉNARIO SIMULÉ'}</small><h3>${result.time} · ${result.coefficient}x</h3></div><div class="calc-metrics"><span>Stabilité ${indices()}%</span><span>Risque ${indices()}%</span><span>Fiabilité ${indices()}%</span></div></div>`}).join('')+'<p class="subtle">Simulation aléatoire de démonstration. Les indices sont illustratifs, non calibrés et ne représentent pas une confiance statistiquement vérifiée.</p>';
     });
   }
   function initDate() { say('todayDate', new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})); const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); const local=now.toISOString().slice(0,16); if($('observedAt')) $('observedAt').value=local; }
