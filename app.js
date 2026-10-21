@@ -64,13 +64,13 @@
     const fixed = {
       '/': { page: 'home' }, '/accueil': { page: 'home' }, '/connexion': { page: 'auth' },
       '/inscription': { page: 'auth', authMode: 'signup' }, '/mot-de-passe-oublie': { page: 'auth', authMode: 'reset' },
-      '/jeux': { page: 'games' }, '/communaute': { page: 'community' }, '/profil': { page: 'profile' }
+      '/jeux': { page: 'games' }, '/communaute': { page: 'community' }, '/profil': { page: 'profile' }, '/premium': { page: 'premium' }, '/a-propos': { page: 'about' }
     };
     return { ...(fixed[path] || fixed['/']), path };
   }
   function routeForCurrentPage(id) {
     if (id === 'games') return `/${state.activeGame.toLowerCase()}${state.gameSection && state.gameSection !== 'overview' ? '/' + state.gameSection : ''}`;
-    return ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil' })[id] || '/accueil';
+    return ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil', premium: '/premium', about: '/a-propos' })[id] || '/accueil';
   }
   function syncRouteFromUrl() {
     const route = parseRoute();
@@ -326,28 +326,56 @@
   }
   function bindCalculator() {
     const button = $('runCalc'); if (!button) return;
+    const panel = $('calculatorSurface');
+    const deterministicRandom = seedText => {
+      let seed = 2166136261;
+      for (let i = 0; i < seedText.length; i++) { seed ^= seedText.charCodeAt(i); seed = Math.imul(seed, 16777619); }
+      return () => { seed += 0x6D2B79F5; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    };
     document.querySelectorAll('[data-mode]').forEach(card => card.addEventListener('click', () => {
       const mode = card.dataset.mode;
       $('calcGame').value = mode;
+      $('gamename').value = mode;
+      if (panel) panel.classList.remove('hide');
       document.querySelectorAll('[data-mode]').forEach(item => { const active = item === card; item.classList.toggle('active', active); item.setAttribute('aria-pressed', active ? 'true' : 'false'); });
-      const panel = document.querySelector('.calculator-surface');
       if (panel) { panel.classList.remove('mode-aviator','mode-jetx','mode-cosmox','mode-premium'); panel.classList.add(`mode-${mode.toLowerCase()}`); }
-      const heading = document.querySelector('.calculator-surface .surface-head h3'); if (heading) heading.textContent = `${mode === 'Premium' ? 'Premium Games' : mode} · Calculateur`;
+      const heading = document.querySelector('.calculator-surface .surface-head h3'); if (heading) heading.textContent = `${mode} · Calculateur`; 
+      const results = $('calcResults'); if (results) results.innerHTML = '<p class="subtle">Saisissez l’heure et le coefficient observé, puis lancez le calcul.</p>';
     }));
     const addSeconds = (clock, seconds) => { const parts = clock.split(':').map(Number); let total=(parts[0]||0)*3600+(parts[1]||0)*60+(parts[2]||0)+seconds; total=((total%86400)+86400)%86400; return [Math.floor(total/3600),Math.floor(total%3600/60),total%60].map(n=>String(n).padStart(2,'0')).join(':'); };
-    const row = (time, low, high) => { const coefficient = low + Math.random()*(high-low); return {time, coefficient: coefficient.toFixed(2)}; };
     button.addEventListener('click', () => {
       const game=$('calcGame').value, clock=$('calcTime').value || '12:00:00', coeff=Number($('calcCoeff').value), out=$('calcResults');
+      if (!document.querySelector(`[data-mode="${game}"]`)?.classList.contains('active')) { out.innerHTML='<p class="message">Sélectionnez d’abord Aviator, CosmoX ou JetX.</p>'; return; }
       if (!Number.isFinite(coeff) || coeff < 1) { out.innerHTML='<p class="message">Saisissez un coefficient valide supérieur ou égal à 1.00x.</p>'; return; }
+      const rng = deterministicRandom(`${game}|${clock}|${coeff.toFixed(2)}`);
       let rules=[];
-      if(game==='Aviator') { if(coeff>=2 && coeff<5) rules=[{m:2,s:18,a:2.5,b:4.99},{m:4,s:26,a:2.5,b:4.99}]; else if(coeff>=5 && coeff<=50) rules=[{m:3,s:29,a:3,b:9.99},{m:4,s:45,a:2.5,b:5},{m:5,s:20,a:5,b:15}]; }
-      if(game==='JetX') { let m=coeff<2?1:coeff<3?2:coeff<4?3:coeff<5?4:3; let range=coeff<2?[1.2,2.1]:coeff<3?[1.7,2.9]:coeff<4?[2.2,3.5]:coeff<5?[3.1,4.9]:[2.5,10]; rules=[{m,s:Math.floor(Math.random()*60),a:range[0],b:range[1]}]; }
+      if(game==='Aviator') { if(coeff>=2 && coeff<5) rules=[{m:2,s:Math.floor(10+rng()*51),a:2.5,b:4.99},{m:4,s:Math.floor(5+rng()*56),a:2.5,b:4.99}]; else if(coeff>=5 && coeff<=50) rules=[{m:3,s:Math.floor(5+rng()*56),a:3,b:9.99},{m:4,s:Math.floor(10+rng()*50),a:2.5,b:5},{m:5,s:Math.floor(5+rng()*56),a:5,b:15}]; }
+      if(game==='JetX') { const m=coeff<2?1:coeff<3?2:coeff<4?3:coeff<5?4:3; const range=coeff<2?[1.2,2.1]:coeff<3?[1.7,2.9]:coeff<4?[2.2,3.5]:coeff<5?[3.1,4.9]:[2.5,10]; rules=[{m,s:Math.floor(rng()*60),a:range[0],b:range[1]}]; }
       if(game==='CosmoX') { if(coeff>=3 && coeff<5) rules=[{m:1,s:57,a:2.5,b:5}]; else if(coeff>=5 && coeff<=10) rules=[{m:1,s:48,a:3.5,b:8},{m:3,s:5,a:3.5,b:20}]; }
-      if(game==='Premium') { if(coeff>=5 && coeff<10) rules=[{m:4,s:8,a:4,b:20}]; else if(coeff>=10 && coeff<=50) rules=[{m:8,s:38,a:3,b:15}]; else if(coeff>50) { const m=[3,5,7,9][Math.floor(Math.random()*4)]; rules=[{m,s:22,a:4.5,b:40}]; } }
       if(!rules.length) { out.innerHTML='<p class="message">Aucun scénario défini pour ce coefficient dans ce mode.</p>'; return; }
-      out.innerHTML=rules.map(r=>{const result=row(addSeconds(clock,r.m*60+r.s),r.a,r.b);const indices=()=>Math.floor(35+Math.random()*46);return `<div class="calc-row calc-row-${game.toLowerCase()}"><div><small class="eyebrow">${game==='Premium'?'RÉSULTAT PREMIUM':'SCÉNARIO SIMULÉ'}</small><h3>${result.time} · ${result.coefficient}x</h3></div><div class="calc-metrics"><span>Stabilité ${indices()}%</span><span>Risque ${indices()}%</span><span>Fiabilité ${indices()}%</span></div></div>`}).join('')+'<p class="subtle">Simulation aléatoire de démonstration. Les indices sont illustratifs, non calibrés et ne représentent pas une confiance statistiquement vérifiée.</p>';
+      out.innerHTML=rules.map(r=>{const value=r.a+rng()*(r.b-r.a);const result={time:addSeconds(clock,r.m*60+r.s),coefficient:value.toFixed(2)};const indices=()=>Math.floor(35+rng()*46);return `<article class="calc-row calc-row-${game.toLowerCase()}"><div class="calc-result-main"><small class="eyebrow">SCÉNARIO SIMULÉ · ${game.toUpperCase()}</small><h3>${result.time} <span>·</span> ${result.coefficient}x</h3><p>Heure estimée dans ce scénario illustratif</p></div><div class="calc-metrics"><span><small>Stabilité*</small><b>${indices()}%</b></span><span><small>Risque*</small><b>${indices()}%</b></span><span><small>Indice*</small><b>${indices()}%</b></span></div></article>`}).join('')+'<p class="subtle">* Indicateurs illustratifs, non validés statistiquement. Même jeu, heure et coefficient = mêmes résultats affichés. Cette stabilité technique ne prédit pas le résultat réel du jeu.</p>';
     });
   }
+    const premiumButton = $('premiumRun');
+    if (premiumButton) premiumButton.addEventListener('click', () => {
+      const clock=$('premiumTime').value || '12:00:00', coeff=Number($('premiumCoeff').value), out=$('premiumResults');
+      if (!Number.isFinite(coeff) || coeff < 1) { out.innerHTML='<p class="message">Saisissez un coefficient valide supérieur ou égal à 1.00x.</p>'; return; }
+      const rng=deterministicRandom(`Premium|${clock}|${coeff.toFixed(2)}`);
+      let rule=null;
+      if(coeff>=5 && coeff<10) rule={m:4,s:8,a:4,b:20};
+      else if(coeff>=10 && coeff<=50) rule={m:8,s:38,a:3,b:15};
+      else if(coeff>50) rule={m:[3,5,7,9][Math.floor(rng()*4)],s:22,a:4.5,b:40};
+      if(!rule){out.innerHTML='<p class="message">Aucun scénario Premium défini pour ce coefficient. Les seuils disponibles commencent à 5.00x.</p>';return;}
+      const total=(Number(clock.slice(0,2)||0)*3600+Number(clock.slice(3,5)||0)*60+Number(clock.slice(6,8)||0)+rule.m*60+rule.s)%86400;
+      const time=[Math.floor(total/3600),Math.floor(total%3600/60),total%60].map(n=>String(n).padStart(2,'0')).join(':');
+      const value=(rule.a+rng()*(rule.b-rule.a)).toFixed(2), stability=Math.floor(35+rng()*46), risk=Math.floor(35+rng()*46), index=Math.floor(35+rng()*46);
+      out.innerHTML=`<article class="calc-row calc-row-premium"><div class="calc-result-main"><small class="eyebrow">SCÉNARIO SIMULÉ · PREMIUM</small><h3>${time} <span>·</span> ${value}x</h3><p>Scénario illustratif, sans garantie sur le jeu réel</p></div><div class="calc-metrics"><span><small>Stabilité*</small><b>${stability}%</b></span><span><small>Risque*</small><b>${risk}%</b></span><span><small>Indice*</small><b>${index}%</b></span></div></article><p class="subtle">Même heure et coefficient = même sortie affichée. Les indicateurs sont illustratifs et non validés statistiquement.</p>`;
+    });
+  // Reduce casual copying of page text while preserving normal form-field editing.
+  document.addEventListener('copy', e => { if (!e.target.closest('input,textarea,[contenteditable="true"]')) e.preventDefault(); });
+  document.addEventListener('cut', e => { if (!e.target.closest('input,textarea,[contenteditable="true"]')) e.preventDefault(); });
+  document.addEventListener('contextmenu', e => { if (!e.target.closest('input,textarea,[contenteditable="true"],button,a')) e.preventDefault(); });
+  document.addEventListener('dragstart', e => { if (!e.target.closest('input,textarea,[contenteditable="true"]')) e.preventDefault(); });
   function initDate() { say('todayDate', new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})); const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); const local=now.toISOString().slice(0,16); if($('observedAt')) $('observedAt').value=local; }
   async function init() {
     bind(); bindCalculator(); initDate();

@@ -63,8 +63,61 @@ button:disabled{cursor:not-allowed!important;opacity:.48;filter:saturate(.5)}
 @media(max-width:900px){.premium-mode-picker{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.premium-mode-picker{gap:7px}.premium-mode-card{padding:11px 9px;gap:8px;border-radius:13px}.mode-emblem{width:34px;height:34px;font-size:16px;border-radius:10px}.mode-copy b{font-size:12px}.mode-copy small{font-size:7px;letter-spacing:.4px}.calc-row{align-items:flex-start;flex-direction:column;padding:14px}.calc-metrics{max-width:100%;justify-content:flex-start}.calc-metrics span{font-size:8px;padding:5px 7px}}
 
-/* Hide legacy observation-entry and previous-history panels; keep their JS hooks intact. */
-#games .surface:has(#gameform),
-#games .surface:has(#historyTitle) {
-  display: none !important;
-}
+/* StratX premium suite: section-based navigation, protected page text and richer results */
+.main-nav{display:flex;flex-wrap:wrap;justify-content:center;gap:9px;padding:10px;margin:18px 0 26px;border:1px solid #2a303a;border-radius:18px;background:linear-gradient(145deg,#121720,#0b0e13);box-shadow:0 16px 35px #0003}
+.main-nav .nav-item{width:auto;min-width:112px;height:48px;display:flex;align-items:center;justify-content:center;gap:9px;padding:0 15px;border-radius:12px}
+.main-nav .nav-label{font-size:11px;font-weight:800;letter-spacing:.35px;color:#d6dce5;white-space:nowrap}
+.main-nav .nav-item.active .nav-label{color:#ffe1a0}
+#app .page{animation:stratxPageIn .24s ease both}
+@keyframes stratxPageIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+#app .page:not(.hide){display:block}
+#app .page.hide{display:none!important}
+#app .page, #app .page p, #app .page h1, #app .page h2, #app .page h3, #app .page h4, #app .page li, #app .page small, #app .page b, #app .page span:not(input span){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#app input,#app textarea,#app select,#app [contenteditable="true"]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+.premium-mode-picker{grid-template-columns:repeat(3,minmax(0,1fr));margin:20px 0}
+.premium-mode-card{min-height:92px;padding:17px;border-radius:17px}
+.premium-mode-card.active{transform:translateY(-2px);box-shadow:0 15px 32px #0005,inset 0 0 0 1px #e7bd6133}
+.calculator-surface{margin-top:20px;padding:clamp(18px,3vw,30px);border-radius:22px}
+.calculator-surface .surface-head h3{font-size:clamp(21px,3vw,29px);letter-spacing:-.4px}
+.calculator-surface .form-grid input{min-height:54px;border-radius:13px;font-size:16px;font-variant-numeric:tabular-nums}
+.calculator-surface #runCalc{min-height:52px;border-radius:13px;font-weight:850;letter-spacing:.2px}
+.calc-results{gap:14px}
+.calc-row{position:relative;overflow:hidden;min-height:116px;padding:clamp(17px,3vw,25px);border-radius:19px;gap:22px;background:radial-gradient(ellipse at 0 0,#c89b3720,transparent 65%),linear-gradient(145deg,#1a202a,#0c1016);box-shadow:0 12px 28px #0003,inset 0 1px #ffffff09}
+.calc-row:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(#f5d58b,#80602c)}
+.calc-result-main{min-width:0;flex:1}
+.calc-result-main .eyebrow{font-size:9px;letter-spacing:1.25px;color:#c6ad75}
+.calc-row h3{font-size:clamp(25px,4vw,36px);font-weight:850;letter-spacing:-.9px;margin:10px 0 5px}
+.calc-row h3 span{font-size:.7em;color:#8b929c}
+.calc-result-main p{font-size:11px;color:#9ca6b4;margin:0}
+.calc-metrics{max-width:none;display:grid;grid-template-columns:repeat(3,minmax(76px,1fr));gap:8px}
+.calc-metrics span{display:flex;flex-direction:column;gap:6px;min-width:76px;padding:10px 12px;border:1px solid #3b414c;border-radius:12px;background:linear-gradient(145deg,#171c24,#0c1016);font-size:10px}
+.calc-metrics span small{font-size:9px;color:#929dad;letter-spacing:.4px}
+.calc-metrics span b{font-size:17px;color:#e4d0a0;font-variant-numeric:tabular-nums}
+.calc-row-jetx:before{background:linear-gradient(#9ed5ff,#386a9b)}.calc-row-jetx .calc-metrics span b{color:#a9d8ff}
+.calc-row-cosmox:before{background:linear-gradient(#e0b9ff,#7448a6)}.calc-row-cosmox .calc-metrics span b{color:#d8b5ff}
+.premium-landing-hero{position:relative;overflow:hidden;padding:clamp(25px,5vw,54px);border:1px solid #80622f;border-radius:26px;background:radial-gradient(ellipse at 90% 0,#8a672a45,transparent 45%),linear-gradient(130deg,#201a11,#11151c 72%);box-shadow:0 25px 65px #0004}
+.premium-landing-hero h2{font-size:clamp(35px,6vw,58px);letter-spacing:-1.6px;margin:14px 0}
+.premium-landing-hero h2 em{color:#f1d58e;font-style:normal}
+.premium-landing-hero p{max-width:690px;color:#bdc4ce;line-height:1.8}
+.premium-access-mark{display:inline-flex;align-items:center;gap:10px;margin-top:15px;padding:10px 14px;border:1px solid #8b6a34;border-radius:999px;color:#f4d78e;background:#241b10;font-size:18px}
+.premium-access-mark span{font-size:10px;font-weight:900;letter-spacing:1.3px}
+.premium-feature-grid,.about-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:20px 0}
+.premium-feature-card{padding:23px;border:1px solid #38332a;border-radius:19px;background:linear-gradient(145deg,#191a1e,#0e1116);box-shadow:0 14px 30px #0002}
+.premium-feature-card>span,.about-number{display:inline-grid;place-items:center;width:38px;height:38px;border:1px solid #735a30;border-radius:12px;background:#292014;color:#f0d58e;font-weight:900}
+.premium-feature-card h3,.about-grid h3{margin:16px 0 8px;font-size:17px}
+.premium-feature-card p,.about-grid p,.premium-disclaimer p{color:#aeb7c4;line-height:1.75;font-size:13px}
+.premium-disclaimer{border-color:#62502f;background:linear-gradient(145deg,#201b13,#101319);padding:25px;border-radius:20px}
+.about-hero{display:grid;grid-template-columns:auto 1fr;gap:23px;align-items:center;padding:clamp(22px,4vw,38px);border-radius:22px;background:radial-gradient(ellipse at 0 0,#57411d55,transparent 58%),linear-gradient(145deg,#181d26,#0c1016)}
+.about-monogram{display:grid;place-items:center;width:92px;height:92px;border:1px solid #b08a43;border-radius:26px;background:linear-gradient(145deg,#352716,#11151c);font-size:34px;font-weight:900;color:#f4d78e;box-shadow:inset 0 0 25px #e5b64d12}
+.about-monogram span{color:#fff}
+.about-hero h3{font-size:clamp(22px,4vw,32px);margin:9px 0}
+.about-hero p{color:#b8c0cc;line-height:1.8;max-width:800px}
+.about-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.about-grid .surface{padding:22px;border-radius:18px;background:linear-gradient(145deg,#171c25,#0c1016)}
+.about-grid h3{margin-top:13px}
+@media(max-width:800px){.main-nav{justify-content:flex-start}.main-nav .nav-item{min-width:0;flex:1;padding:0 9px}.main-nav .nav-label{font-size:10px}.premium-feature-grid{grid-template-columns:1fr}.calc-row{align-items:stretch;flex-direction:column}.calc-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.main-nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;padding:8px}.main-nav .nav-item{height:46px;gap:6px;padding:0 5px}.main-nav .nav-icon{font-size:19px}.main-nav .nav-label{font-size:9px;letter-spacing:0}.premium-mode-picker{grid-template-columns:1fr;gap:9px}.premium-mode-card{min-height:72px}.about-hero{grid-template-columns:1fr}.about-monogram{width:70px;height:70px;border-radius:20px;font-size:27px}.about-grid{grid-template-columns:1fr}.calc-metrics{gap:6px}.calc-metrics span{min-width:0;padding:9px 7px}.calc-metrics span b{font-size:15px}.calc-metrics span small{font-size:8px}}
+/* Preserve the previously requested removal of the legacy entry/history panels. */
+#games .surface:has(#gameform),#games .surface:has(#historyTitle){display:none!important}
+.premium-calculator{margin:22px 0 24px;border-color:#a27c38!important;box-shadow:0 22px 60px #b88a2915,inset 0 1px #ffffff0a!important}
+.premium-calculator .surface-head h3{font-size:clamp(22px,3vw,30px)}
