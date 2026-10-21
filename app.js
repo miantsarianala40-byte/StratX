@@ -4,7 +4,7 @@
   const SUPABASE_KEY = 'sb_publishable_IFZGXyCPkt_eZFjaDdWOaA_LYZ1UdEg';
   const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
   const $ = id => document.getElementById(id);
-  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', gameSection: 'overview', games: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false };
+  const state = { user: null, currentPage: 'home', activeGame: 'Aviator', gameSection: 'overview', games: [], posts: [], profile: {}, communityFilter: 'all', communityQuery: '', communitySort: 'newest', communityLiked: new Set(), communitySaved: new Set(), communityComments: {}, showGameHistory: false, premiumAccess: false, premiumAccessLoading: false };
   const gameInfo = {
     Aviator: { desc: 'Consignez les observations passées du jeu Aviator et consultez un résumé descriptif.', logo: '✈', cls: 'aviator-logo' },
     JetX: { desc: 'Un espace dédié pour garder un historique personnel des observations JetX.', logo: 'JX', cls: 'jetx-logo' },
@@ -102,6 +102,7 @@
     document.querySelectorAll('[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page === id));
     if (id === 'games') renderGame();
     if (id === 'profile') authUI();
+    if (id === 'premium') loadPremiumAccess();
     if (updateUrl) history.pushState({}, '', routeForCurrentPage(id));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -329,6 +330,53 @@
     $('requestDeleteAccount')?.addEventListener('click', async()=>{if(!state.user||!db)return;if(!confirm('Envoyer une demande de suppression de compte ? Le compte ne sera pas supprimé automatiquement.'))return;const b=$('requestDeleteAccount');b.disabled=true;try{const {error}=await db.from('account_deletion_requests').insert({user_id:state.user.id,email:state.user.email,status:'pending'});if(error)throw error;msg('deleteAccountMsg','Demande enregistrée. Une validation e-mail et une suppression côté serveur restent nécessaires avant toute suppression définitive.');}catch(error){msg('deleteAccountMsg',friendlyError(error),true);}finally{b.disabled=false;}});
     $('copyId').addEventListener('click', async () => { const id=state.user?.id; if(!id) return; try { await navigator.clipboard.writeText(id); $('copyId').textContent='Copié ✓'; setTimeout(()=>$('copyId').textContent='Copier',1600); } catch { msg('profilemsg','Impossible de copier automatiquement. Sélectionnez l’identifiant pour le copier.'); } });
   }
+  async function loadPremiumAccess() {
+    const panel = $('premiumCalculator');
+    const lock = $('premiumLocked');
+    const message = $('premiumLockMessage');
+    const check = $('premiumCheckAccess');
+    const run = $('premiumRun');
+    if (!panel || !lock) return false;
+    state.premiumAccess = false;
+    state.premiumAccessLoading = true;
+    panel.classList.add('premium-locked');
+    if (run) run.disabled = true;
+    if (message) message.textContent = 'Vérification sécurisée de votre statut Premium…';
+    if (!db || !state.user) {
+      if (message) message.textContent = 'Midira amin’ny kaontinao aloha, avy eo hamarino ny fidirana Premium.';
+      state.premiumAccessLoading = false;
+      return false;
+    }
+    try {
+      // Access is granted only by a server-managed subscription row; client profile metadata is not trusted.
+      const { data, error } = await db.from('premium_subscriptions').select('status,expires_at').eq('user_id', state.user.id).maybeSingle();
+      if (error) throw error;
+      const expires = data?.expires_at ? new Date(data.expires_at).getTime() : null;
+      state.premiumAccess = !!data && data.status === 'active' && (expires === null || (Number.isFinite(expires) && expires > Date.now()));
+      if (state.premiumAccess) {
+        panel.classList.remove('premium-locked');
+        if (message) message.textContent = 'Accès confirmé. Votre espace Premium est déverrouillé.';
+        lock.classList.add('hide');
+        if (run) run.disabled = false;
+      } else {
+        panel.classList.add('premium-locked');
+        lock.classList.remove('hide');
+        if (message) message.textContent = data?.status === 'active' ? 'Votre accès Premium a expiré. Contactez le responsable pour le renouveler.' : 'Votre compte ne possède pas encore d’accès Premium actif. Le calculateur reste verrouillé.';
+        if (run) run.disabled = true;
+      }
+    } catch (error) {
+      state.premiumAccess = false;
+      panel.classList.add('premium-locked');
+      lock.classList.remove('hide');
+      if (message) message.textContent = 'Impossible de valider l’accès Premium. Le calculateur reste verrouillé. La table premium_subscriptions doit être installée dans Supabase.';
+      if (run) run.disabled = true;
+      console.warn('StratX Premium access check:', error);
+    } finally {
+      state.premiumAccessLoading = false;
+    }
+    return state.premiumAccess;
+  }
+
   function bindCalculator() {
     const button = $('runCalc'); if (!button) return;
     const panel = $('calculatorSurface');
@@ -358,7 +406,8 @@
     });
   }
     const premiumButton = $('premiumRun');
-    if (premiumButton) premiumButton.addEventListener('click', () => {
+    if (premiumButton) premiumButton.addEventListener('click', async () => {
+      if (state.premiumAccessLoading || !state.premiumAccess) { await loadPremiumAccess(); if (!state.premiumAccess) { const lockMessage=$('premiumLockMessage'); if (lockMessage) lockMessage.textContent='Accès refusé : activez votre abonnement Premium avant tout calcul.'; return; } }
       const clock=$('premiumTime').value, coeff=Number($('premiumCoeff').value), out=$('premiumResults');
       if (!clock) { out.innerHTML='<p class="message">Saisissez ou dictez l’heure de départ.</p>'; $('premiumTime').focus(); return; }
       if (!Number.isFinite(coeff) || coeff < 1) { out.innerHTML='<p class="message">Saisissez un coefficient valide supérieur ou égal à 1.00x.</p>'; return; }
@@ -460,6 +509,7 @@
   };
   document.querySelectorAll('[data-voice-target]').forEach(button => button.addEventListener('click', () => {
     const target = $(button.dataset.voiceTarget);
+    if ((target?.id === 'premiumTime' || target?.id === 'premiumCoeff') && !state.premiumAccess) { loadPremiumAccess(); const lockMessage=$('premiumLockMessage'); if(lockMessage) lockMessage.textContent='La saisie vocale Premium est réservée aux comptes ayant un accès actif.'; return; }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!target) return;
     if (!SpeechRecognition) {
@@ -473,32 +523,46 @@
     const recognition = new SpeechRecognition();
     const requestedLanguage = languageSelect?.value || 'fr-FR';
     recognition.lang = requestedLanguage === 'auto' ? (navigator.language || 'fr-FR') : requestedLanguage;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
+    recognition.continuous = false;
     recognition.maxAlternatives = 3;
     button.classList.add('listening');
     button.disabled = true;
     recognition.onresult = event => {
-      const alternatives = Array.from(event.results?.[0] || []).map(item => String(item.transcript || '').trim());
       let assigned = false;
-      for (const spoken of alternatives) {
-        if (target.type === 'time') {
-          const parts = parseTimeSpeech(spoken);
-          if (parts && parts.every(Number.isFinite) && parts[0] >= 0 && parts[0] <= 23 && parts[1] >= 0 && parts[1] <= 59 && parts[2] >= 0 && parts[2] <= 59) {
-            target.value = parts.map(n=>String(Math.trunc(n)).padStart(2,'0')).join(':'); assigned = true; break;
+      let heard = '';
+      // Read all fresh results, including interim hypotheses, so the field fills while the user is speaking.
+      for (let i = event.resultIndex || 0; i < event.results.length; i++) {
+        const result = event.results[i];
+        const alternatives = Array.from(result || []).map(item => String(item.transcript || '').trim()).filter(Boolean);
+        for (const spoken of alternatives) {
+          heard = spoken;
+          if (target.type === 'time') {
+            const parts = parseTimeSpeech(spoken);
+            if (parts && parts.every(Number.isFinite) && parts[0] >= 0 && parts[0] <= 23 && parts[1] >= 0 && parts[1] <= 59 && parts[2] >= 0 && parts[2] <= 59) {
+              target.value = parts.map(n=>String(Math.trunc(n)).padStart(2,'0')).join(':'); assigned = true; break;
+            }
+          } else {
+            const value = parseDecimalSpeech(spoken);
+            if (Number.isFinite(value) && value >= 1 && value <= 100000000) { target.value = String(value); assigned = true; break; }
           }
-        } else {
-          const value = parseDecimalSpeech(spoken);
-          if (Number.isFinite(value) && value >= 1 && value <= 100000000) { target.value = String(value); assigned = true; break; }
         }
+        if (assigned) break;
       }
       const out = surface?.querySelector('.calc-results');
-      if (!assigned && out) out.innerHTML = `<p class="message">Voix entendue mais format non reconnu. Réessayez en disant ${target.type === 'time' ? '« onze heures, vingt-trois minutes, douze secondes » ou « 11, 23, 12 »' : '« huit virgule soixante-huit », « 8 point 68 » ou « 8,68 »'}.</p>`;
-      if (assigned) { target.dispatchEvent(new Event('input',{bubbles:true})); target.dispatchEvent(new Event('change',{bubbles:true})); }
+      if (assigned) {
+        target.dispatchEvent(new Event('input',{bubbles:true})); target.dispatchEvent(new Event('change',{bubbles:true}));
+        if (out) out.innerHTML = `<p class="voice-success">Reconnu automatiquement : <b>${target.value}</b></p>`;
+      } else if (event.results?.[event.results.length - 1]?.isFinal && out) {
+        out.innerHTML = `<p class="message">${heard ? 'Voix entendue mais format non reconnu.' : 'Aucune parole reconnue.'} Réessayez en disant ${target.type === 'time' ? '« onze heures, vingt-trois minutes, douze secondes » ou « 11, 23, 12 »' : '« huit virgule soixante-huit », « 8 point 68 » ou « 8,68 »'}.</p>`;
+      }
     };
     recognition.onerror = () => { const out=surface?.querySelector('.calc-results'); if(out) out.innerHTML='<p class="message">Saisie vocale interrompue. Vérifiez l’autorisation du microphone et la langue choisie, puis réessayez.</p>'; };
     recognition.onend = () => { button.classList.remove('listening'); button.disabled = false; };
     try { recognition.start(); } catch (_) { button.classList.remove('listening'); button.disabled = false; }
   }));
+
+  $('premiumCheckAccess')?.addEventListener('click', () => loadPremiumAccess());
 
   const premiumActivateInfo = $('premiumActivateInfo');
   if (premiumActivateInfo) premiumActivateInfo.addEventListener('click', () => {
@@ -518,8 +582,8 @@
     if (!db) { setStatus('Supabase indisponible',false); msg('authmsg','Impossible de charger Supabase. Vérifiez la connexion Internet ou la configuration de la bibliothèque.',true); return; }
     try {
       const { data, error } = await db.auth.getSession(); if(error) throw error; state.user=data.session?.user || null; authUI();
-      if(state.user) { setStatus('Connecté'); await refresh(); syncRouteFromUrl(); } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
-      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide'); history.replaceState({}, '', '/mot-de-passe-oublie'); setAuthFlow('updatePassword'); msg('authmsg', 'Lien vérifié. Choisissez maintenant un nouveau mot de passe.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; } });
+      if(state.user) { setStatus('Connecté'); await refresh(); await loadPremiumAccess(); syncRouteFromUrl(); } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
+      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide'); history.replaceState({}, '', '/mot-de-passe-oublie'); setAuthFlow('updatePassword'); msg('authmsg', 'Lien vérifié. Choisissez maintenant un nouveau mot de passe.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; } });
     } catch(error) { setStatus('Erreur de connexion',false); msg('authmsg',friendlyError(error),true); console.error('StratX auth init:',error); }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

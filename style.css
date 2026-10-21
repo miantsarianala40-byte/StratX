@@ -171,3 +171,15 @@ button:disabled{cursor:not-allowed!important;opacity:.48;filter:saturate(.5)}
 .premium-disclaimer h3{color:#e8d19a;font-size:clamp(17px,2.5vw,22px);line-height:1.45;margin:9px 0}
 .premium-disclaimer p{color:#aeb7c3;font-size:12px;line-height:1.85;margin:0}
 @media(max-width:650px){.voice-language-row{grid-template-columns:1fr;gap:9px;padding:12px}.voice-language-note{grid-column:auto}.premium-offer-card{grid-template-columns:1fr;gap:16px}.premium-offer-side{padding:18px}.premium-hero-benefits{gap:7px}.premium-hero-benefits span{font-size:10px;padding:8px 9px}.premium-hero-pro h2{font-size:36px}}
+
+
+/* Premium entitlement gate: no Premium inputs or results are shown until access is verified. */
+.premium-lock-panel{display:flex;align-items:center;gap:18px;padding:clamp(20px,4vw,32px);margin:22px 0;border:1px solid #a7833c;border-radius:18px;background:radial-gradient(ellipse at 0 0,#c49a3a20,transparent 58%),linear-gradient(145deg,#211b11,#10141a);box-shadow:0 16px 42px #0003}
+.premium-lock-icon{display:grid;place-items:center;flex:0 0 58px;width:58px;height:58px;border:1px solid #bd984d88;border-radius:17px;background:#f0c76a12;color:#ffdf96;font-size:28px}
+.premium-lock-panel h3{margin:0 0 8px;color:#f0d18a;font-size:clamp(18px,3vw,24px)}
+.premium-lock-panel p{margin:0 0 14px;color:#b9c1cd;font-size:13px;line-height:1.75}
+.premium-lock-panel .btn{min-height:42px}
+.premium-locked .voice-language-row,.premium-locked .form-grid,.premium-locked #premiumResults{display:none!important}
+.premium-calculator .premium-lock-panel.hide{display:none!important}
+.voice-success{margin:0;padding:11px 13px;border:1px solid #478c6b;border-radius:10px;background:#1c493323;color:#a7edc7;font-size:12px}
+@media(max-width:520px){.premium-lock-panel{align-items:flex-start;gap:12px;padding:17px}.premium-lock-icon{flex-basis:44px;width:44px;height:44px;font-size:21px;border-radius:13px}}
