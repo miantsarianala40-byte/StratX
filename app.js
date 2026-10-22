@@ -74,44 +74,48 @@
     if (window.location.pathname !== '/mot-de-passe-oublie') history.replaceState({}, '', '/mot-de-passe-oublie');
   }
   function parseRoute() {
-    const rawPath = decodeURIComponent(window.location.pathname).replace(/\/+$/, '') || '/';
-    const path = rawPath;
+    const path = decodeURIComponent(window.location.pathname).replace(/\/+/g, '/').replace(/\/+$/, '') || '/';
     const parts = path.split('/').filter(Boolean);
     const first = (parts[0] || '').toLowerCase();
+    // Routes publiques canoniques : /observations/, /observations/cosmox/,
+    // /observations/cosmox/resultats/ (même structure pour aviator et jetx).
+    if (first === 'observations') {
+      const game = gameSlug[(parts[1] || '').toLowerCase()] || null;
+      const section = (parts[2] || 'overview').toLowerCase();
+      return { page: 'games', game: game || 'Aviator', section: gameRouteSections.has(section) ? section : 'overview', path };
+    }
+    // Compatibilité avec les anciens liens directs /aviator/ et /jetx/.
     if (gameSlug[first]) {
       const section = (parts[1] || 'overview').toLowerCase();
       return { page: 'games', game: gameSlug[first], section: gameRouteSections.has(section) ? section : 'overview', path };
     }
+    // Rediriger les anciens liens /admin/observations/... vers les routes publiques.
+    if (first === 'admin' && (parts[1] || '').toLowerCase() === 'observations') {
+      const game = gameSlug[(parts[2] || '').toLowerCase()] || 'Aviator';
+      const section = (parts[3] || 'overview').toLowerCase();
+      return { page: 'games', game, section: gameRouteSections.has(section) ? section : 'overview', legacyAdminObservationPath: true, path };
+    }
     if (first === 'admin' && parts[1]) {
       const adminSubroutes = {
         abonnement: { page: 'subscription' }, premium: { page: 'premium' },
-        notifications: { page: 'notifications' }, communaute: { page: 'community' },
-        profil: { page: 'profile' }, observations: { page: 'games' }
+        notifications: { page: 'notifications' }, communaute: { page: 'community' }, profil: { page: 'profile' }
       };
       const subroute = adminSubroutes[parts[1].toLowerCase()];
-      if (subroute) {
-        // Les observations Admin acceptent un jeu explicite dans l’URL :
-        // /admin/observations/cosmox, /jetx ou /aviator.
-        const selectedGame = parts[1].toLowerCase() === 'observations' ? gameSlug[(parts[2] || '').toLowerCase()] : null;
-        const sectionPart = selectedGame ? parts[3] : (parts[1].toLowerCase() === 'observations' ? parts[2] : null);
-        const section = (sectionPart || 'overview').toLowerCase();
-        return { ...subroute, ...(selectedGame ? { game: selectedGame } : {}), section: gameRouteSections.has(section) ? section : 'overview', adminPath: true, path };
-      }
+      if (subroute) return { ...subroute, adminPath: true, path };
     }
     const fixed = {
       '/': { page: 'home' }, '/accueil': { page: 'home' }, '/connexion': { page: 'auth' },
       '/inscription': { page: 'auth', authMode: 'signup' }, '/mot-de-passe-oublie': { page: 'auth', authMode: 'reset' },
-      '/jeux': { page: 'games' }, '/communaute': { page: 'community' }, '/profil': { page: 'profile' }, '/premium': { page: 'premium' }, '/abonnement': { page: 'subscription' }, '/admin': { page: 'adminDashboard' }, '/notifications': { page: 'notifications' }, '/a-propos': { page: 'about' }
+      '/jeux': { page: 'games' }, '/observations': { page: 'games', game: 'Aviator', section: 'overview' },
+      '/communaute': { page: 'community' }, '/profil': { page: 'profile' }, '/premium': { page: 'premium' }, '/abonnement': { page: 'subscription' }, '/admin': { page: 'adminDashboard' }, '/notifications': { page: 'notifications' }, '/a-propos': { page: 'about' }
     };
     return { ...(fixed[path] || fixed['/']), path };
   }
   function routeForCurrentPage(id) {
     if (id === 'games') {
-      const gamePath = state.activeGame.toLowerCase();
+      const gamePath = (state.activeGame || 'Aviator').toLowerCase();
       const section = state.gameSection && state.gameSection !== 'overview' ? '/' + state.gameSection : '';
-      return state.user?.app_metadata?.role === 'admin'
-        ? `/admin/observations/${gamePath}${section}/`
-        : `/${gamePath}${section}`;
+      return `/observations/${gamePath}${section}/`;
     }
     const base = ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil', premium: '/premium', subscription: '/abonnement', adminDashboard: '/admin/', notifications: '/notifications', about: '/a-propos' })[id] || '/accueil';
     if (state.user?.app_metadata?.role === 'admin') {
@@ -139,7 +143,7 @@
       document.querySelectorAll('.game-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.game === route.game));
     }
     showPage(route.page, false);
-    if (route.adminPath) {
+    if (route.adminPath || route.legacyAdminObservationPath) {
       const canonical = routeForCurrentPage(route.page);
       if (window.location.pathname !== canonical) history.replaceState({}, '', canonical);
     }
