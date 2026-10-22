@@ -78,20 +78,20 @@
     const path = rawPath;
     const parts = path.split('/').filter(Boolean);
     const first = (parts[0] || '').toLowerCase();
-    // Canonical observations routes: /observations/, /observations/cosmox/,
-    // /observations/cosmox/resultats/ (same structure for aviator and jetx).
+    // Canonical game URLs live under /observations/:game/:section.
+    // Keep /observations/ as the neutral game landing page.
     if (first === 'observations') {
-      if (parts.length === 1) return { page: 'games', game: 'Aviator', section: 'overview', path, observationsRoot: true };
-      const game = gameSlug[(parts[1] || '').toLowerCase()];
-      if (game) {
+      const slug = (parts[1] || '').toLowerCase();
+      if (!slug) return { page: 'games', observationsHome: true, path };
+      if (gameSlug[slug]) {
         const section = (parts[2] || 'overview').toLowerCase();
-        return { page: 'games', game, section: gameRouteSections.has(section) ? section : 'overview', path };
+        return { page: 'games', game: gameSlug[slug], section: gameRouteSections.has(section) ? section : 'overview', path };
       }
     }
-    // Backward compatibility for older direct game URLs: /cosmox/resultats/.
+    // Legacy aliases remain readable, but navigation will use canonical URLs.
     if (gameSlug[first]) {
       const section = (parts[1] || 'overview').toLowerCase();
-      return { page: 'games', game: gameSlug[first], section: gameRouteSections.has(section) ? section : 'overview', path };
+      return { page: 'games', game: gameSlug[first], section: gameRouteSections.has(section) ? section : 'overview', path, legacyGamePath: true };
     }
     if (first === 'admin' && parts[1]) {
       const adminSubroutes = {
@@ -112,7 +112,7 @@
   function routeForCurrentPage(id) {
     if (id === 'games') {
       const slug = String(state.activeGame || 'Aviator').toLowerCase();
-      const section = state.gameSection && state.gameSection !== 'overview' ? `/${state.gameSection}` : '';
+      const section = state.gameSection && state.gameSection !== 'overview' ? '/' + state.gameSection : '';
       return `/observations/${slug}${section}/`;
     }
     const base = ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil', premium: '/premium', subscription: '/abonnement', adminDashboard: '/admin/', notifications: '/notifications', about: '/a-propos' })[id] || '/accueil';
@@ -128,7 +128,10 @@
     if (!state.user) {
       $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
       if (route.page === 'auth') { if (route.authMode === 'signup') setAuthFlow('signup', 1); else if (route.authMode === 'reset') setAuthFlow('reset'); else setAuthFlow('login'); }
-      else if (route.path === '/') setAuthFlow('welcome');
+      else setAuthFlow('login');
+      // Never leave a logged-out visitor on a stale protected/game URL.
+      const publicAuthPaths = ['/connexion', '/inscription', '/mot-de-passe-oublie'];
+      if (!publicAuthPaths.includes(window.location.pathname.replace(/\/+$/, '') || '/')) history.replaceState({}, '', '/connexion');
       return;
     }
     $('auth')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
@@ -138,12 +141,12 @@
       state.gameSection = route.section || 'overview';
       state.showGameHistory = state.gameSection === 'historique';
       document.querySelectorAll('.game-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.game === route.game));
+    } else if (route.observationsHome) {
+      state.gameSection = 'overview';
+      state.showGameHistory = false;
     }
     showPage(route.page, false);
-    if (route.page === 'games') {
-      const canonical = route.observationsRoot ? '/observations/' : routeForCurrentPage('games');
-      if (window.location.pathname !== canonical) history.replaceState({}, '', canonical);
-    }
+    if (route.legacyGamePath) history.replaceState({}, '', routeForCurrentPage('games'));
     if (route.adminPath) {
       const canonical = routeForCurrentPage(route.page);
       if (window.location.pathname !== canonical) history.replaceState({}, '', canonical);
@@ -361,7 +364,18 @@
     } catch (error) { msg('authmsg', friendlyError(error), true); if (recoveryMode) lockRecoveryInterface('La réinitialisation n’est pas terminée. Corrigez le problème puis réessayez.'); }
     finally { recoverySaving = false; ['login','signup','resetPassword','updatePassword'].forEach(id => { const b = $(id); if (b) b.disabled = false; }); }
   }
-  async function signOut() { if (!db) return; const { error } = await db.auth.signOut(); if (error) msg('profilemsg', friendlyError(error), true); }
+  async function signOut() {
+    if (!db) return;
+    const { error } = await db.auth.signOut();
+    if (error) { msg('profilemsg', friendlyError(error), true); return; }
+    state.user = null;
+    state.posts = []; state.games = []; state.profile = {};
+    authUI();
+    $('app')?.classList.add('hide'); $('auth')?.classList.remove('hide'); $('logout')?.classList.add('hide');
+    setAuthFlow('login');
+    history.replaceState({}, '', '/connexion');
+    setStatus('Déconnecté');
+  }
   function bind() {
     const menuToggle = $('menuToggle');
     const mainNavigation = $('mainNavigation');
@@ -372,7 +386,7 @@
     document.addEventListener('click', e => { if (mainNavigation && menuToggle && !mainNavigation.hidden && !mainNavigation.contains(e.target) && !menuToggle.contains(e.target)) closeNavigation(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNavigation(); });
     document.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => { showPage(btn.dataset.goto); const nav=$('mainNavigation'), toggle=$('menuToggle'); if(nav) nav.hidden=true; if(toggle){toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Ouvrir le menu');toggle.classList.remove('is-open');} }));
-    document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.gameSection = 'overview'; state.showGameHistory = false; document.querySelectorAll('.game-tab').forEach(tab => tab.classList.toggle('active', tab === btn)); history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
+    document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { const selected = gameInfo[btn.dataset.game] ? btn.dataset.game : gameSlug[String(btn.dataset.game || '').toLowerCase()]; if (!selected) return; state.activeGame = selected; state.gameSection = 'overview'; state.showGameHistory = false; document.querySelectorAll('.game-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.game === selected)); history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
     document.querySelectorAll('[data-game-section]').forEach(btn => btn.addEventListener('click', () => { const next = btn.dataset.gameSection; if (!['overview', ...gameRouteSections].includes(next)) return; state.gameSection = next; state.showGameHistory = next === 'historique'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
     $('toggleGameHistory')?.addEventListener('click', () => { state.showGameHistory = !state.showGameHistory; state.gameSection = state.showGameHistory ? 'historique' : 'overview'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); });
     $('login').addEventListener('click', () => { if (authMode === 'welcome') { history.pushState({}, '', '/connexion'); setAuthFlow('login'); $('email')?.focus(); return; } history.pushState({}, '', '/connexion'); setAuthFlow('login'); runAuth('login'); });
@@ -883,7 +897,7 @@
       recoveryMode = window.location.hash.includes('type=recovery') || new URLSearchParams(window.location.search).get('recovery') === '1';
       if (recoveryMode) lockRecoveryInterface('Lien de réinitialisation détecté. Choisissez et confirmez un nouveau mot de passe pour continuer.');
       if(state.user) { setStatus('Connecté'); if (!recoveryMode) { await refresh(); await loadPremiumAccess(); syncRouteFromUrl(); } } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
-      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { recoveryMode = true; lockRecoveryInterface('Lien vérifié. Choisissez et confirmez maintenant un nouveau mot de passe pour accéder à StratX.'); return; } if (recoveryMode) { lockRecoveryInterface('La réinitialisation est obligatoire avant de pouvoir accéder à StratX.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; loadPremiumAccess(); } });
+      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { recoveryMode = true; lockRecoveryInterface('Lien vérifié. Choisissez et confirmez maintenant un nouveau mot de passe pour accéder à StratX.'); return; } if (recoveryMode) { lockRecoveryInterface('La réinitialisation est obligatoire avant de pouvoir accéder à StratX.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('Déconnecté'); state.posts=[]; state.games=[]; loadPremiumAccess(); $('app')?.classList.add('hide'); $('auth')?.classList.remove('hide'); $('logout')?.classList.add('hide'); setAuthFlow('login'); if (window.location.pathname !== '/connexion') history.replaceState({}, '', '/connexion'); } });
     } catch(error) { setStatus('Erreur de connexion',false); msg('authmsg',friendlyError(error),true); console.error('StratX auth init:',error); }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
