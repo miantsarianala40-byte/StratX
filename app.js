@@ -210,6 +210,8 @@
     authMode = mode; signupStep = step; resetSent = false;
     const signup = mode === 'signup', reset = mode === 'reset', update = mode === 'updatePassword';
     $('signupNameWrap')?.classList.toggle('hide', !signup || step !== 1);
+    // The stylesheet keeps this block hidden unless signup-mode is present.
+    $('signupNameWrap')?.classList.toggle('signup-mode', signup && step === 1);
     $('emailField')?.classList.toggle('hide', update || (signup && step !== 1));
     $('passwordField')?.classList.toggle('hide', reset || (signup && step !== 2));
     $('confirmPasswordField')?.classList.toggle('hide', !signup || step !== 2);
@@ -254,7 +256,7 @@
         msg('authmsg', 'Connexion réussie. Bienvenue sur StratX.');
       } else if (action === 'signup') {
         const displayName = $('signupName').value.trim();
-        const redirectUrl = window.location.origin + '/connexion';
+        const redirectUrl = new URL('/connexion', window.location.origin).href;
         const { data, error } = await db.auth.signUp({
           email,
           password,
