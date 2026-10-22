@@ -233,3 +233,27 @@ button:disabled{cursor:not-allowed!important;opacity:.48;filter:saturate(.5)}
 /* Video publicitaire et tableau de bord administrateur */
 .premium-admin-dashboard{position:relative;overflow:hidden;padding:clamp(20px,4vw,32px);border:1px solid #b9975070;border-radius:24px;background:radial-gradient(ellipse at 100% 0,#b9975028,transparent 45%),linear-gradient(135deg,#1d1b17,#11151d 72%);box-shadow:0 22px 65px #0003}.premium-admin-dashboard:after{content:"SX";position:absolute;right:18px;bottom:-48px;font:800 150px/1 'Space Grotesk',sans-serif;color:#f3d79508;pointer-events:none}.premium-admin-stats article{border:1px solid #b9975035;border-radius:17px;background:#090c12a8;padding:18px}.premium-admin-plan-summary{border:1px solid #b9975028;border-radius:14px;padding:12px;background:#080b1080}
 .stratx-ad-video[hidden]{display:none!important}
+
+/* StratX Advanced navigation and separated control spaces */
+.btn-premium-shortcut{display:inline-flex;align-items:center;gap:8px;margin-left:8px;padding:10px 15px;border:1px solid #d4b365;border-radius:12px;background:linear-gradient(135deg,#f0d99b,#b98b35);color:#17130b;font-weight:800;box-shadow:0 8px 22px #c49a4a20}
+.btn-admin-shortcut{display:inline-flex;align-items:center;gap:8px;margin-left:8px;padding:10px 15px;border:1px solid #b99b68;border-radius:12px;background:linear-gradient(135deg,#27231b,#11151c);color:#f1d596;font-weight:800}
+.main-nav{position:sticky;top:8px;z-index:20;backdrop-filter:blur(18px);box-shadow:0 10px 32px #0002}
+.main-nav .nav-item{transition:transform .18s ease,border-color .18s ease,background .18s ease}
+.main-nav .nav-item:hover{transform:translateY(-2px)}
+#adminDashboard{animation:pageRise .35s ease both}
+#adminDashboard .premium-admin-dashboard{margin-top:0}
+#adminDashboard .premium-admin-panel{margin-top:18px}
+.duration-direct-label{grid-column:1/-1!important;margin:4px 0 -7px!important;color:#b9c2cf!important;font-size:11px!important}
+#premiumDurationExact{grid-column:1/-1;width:100%;min-height:44px;border:1px solid #b9975066!important;border-radius:11px!important;background:#0b0e14!important;color:#f6e3b1!important;padding:10px 12px!important;font-size:16px!important;font-weight:750!important}
+.auth-card .text-button{display:block;width:100%;margin-top:11px;text-align:center}
+#backToLogin{border:1px solid #ffffff20;border-radius:10px;padding:10px;color:#d7c18f}
+#backToLogin:hover{background:#d6b25312}
+.page-title{margin-bottom:22px}
+.surface,.stat-card,.premium-feature-card{transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease}
+.surface:hover,.stat-card:hover{border-color:#b9975040}
+@media(max-width:650px){.btn-premium-shortcut,.btn-admin-shortcut{padding:9px 10px;font-size:11px;margin-left:4px}.top-right{gap:5px}.main-nav{top:4px}.main-nav .nav-label{font-size:10px}.duration-direct-label{margin-top:8px!important}}
+.btn-subscription-shortcut{display:inline-flex;align-items:center;gap:8px;margin-left:6px;padding:10px 13px;border:1px solid #ffffff22;border-radius:12px;background:#ffffff08;color:#e6eaf0;font-weight:750}
+#subscription .premium-offer-card{margin-top:0}
+#subscription .premium-member-dashboard{margin-top:20px}
+#subscription .premium-disclaimer{margin-top:18px}
+@media(max-width:650px){.btn-subscription-shortcut{padding:9px 8px;font-size:10px;margin-left:3px}}

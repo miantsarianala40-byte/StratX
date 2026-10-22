@@ -122,3 +122,55 @@ end; $$;
 drop trigger if exists stratx_premium_request_decision_notification on public.premium_payment_requests;
 create trigger stratx_premium_request_decision_notification after update of status on public.premium_payment_requests
 for each row execute function public.stratx_notify_premium_request_decision();
+
+-- Validation transactionnelle des demandes : résout les échecs partiels lors de l'acceptation/refus.
+-- Appelée par l'interface via supabase.rpc('stratx_review_premium_request', ...).
+create or replace function public.stratx_review_premium_request(p_request_id bigint, p_decision text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_request public.premium_payment_requests%rowtype;
+  v_now timestamptz := now();
+  v_base timestamptz;
+  v_expiry timestamptz;
+begin
+  if coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'admin' then
+    raise exception 'Admin only';
+  end if;
+  if p_decision not in ('approved','rejected') then
+    raise exception 'Decision must be approved or rejected';
+  end if;
+
+  select * into v_request
+  from public.premium_payment_requests
+  where id = p_request_id
+  for update;
+
+  if not found then raise exception 'Request not found'; end if;
+  if v_request.status <> 'pending' then raise exception 'This request has already been reviewed'; end if;
+
+  if p_decision = 'approved' then
+    select expires_at into v_base
+    from public.premium_subscriptions
+    where user_id = v_request.user_id
+    for update;
+    if v_base is null or v_base <= v_now then v_base := v_now; end if;
+    v_expiry := v_base + make_interval(days => greatest(1, least(365, v_request.duration_days)));
+    insert into public.premium_subscriptions(user_id,status,expires_at,updated_at)
+    values(v_request.user_id,'active',v_expiry,v_now)
+    on conflict (user_id) do update
+      set status='active', expires_at=excluded.expires_at, updated_at=v_now;
+  end if;
+
+  update public.premium_payment_requests
+  set status=p_decision, reviewed_at=v_now, reviewed_by=auth.uid()
+  where id=p_request_id;
+
+  return jsonb_build_object('ok', true, 'status', p_decision, 'expires_at', v_expiry);
+end;
+$$;
+revoke all on function public.stratx_review_premium_request(bigint,text) from public;
+grant execute on function public.stratx_review_premium_request(bigint,text) to authenticated;

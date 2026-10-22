@@ -37,6 +37,9 @@
     $('auth')?.classList.toggle('hide', logged);
     $('app')?.classList.toggle('hide', !logged);
     $('logout')?.classList.toggle('hide', !logged);
+    $('premiumShortcut')?.classList.toggle('hide', !logged);
+    $('subscriptionShortcut')?.classList.toggle('hide', !logged);
+    $('adminShortcut')?.classList.toggle('hide', !logged || state.user?.app_metadata?.role !== 'admin');
     if (!logged) return;
     const meta = state.user.user_metadata || {};
     const displayName = meta.display_name || 'Membre StratX';
@@ -69,13 +72,13 @@
     const fixed = {
       '/': { page: 'home' }, '/accueil': { page: 'home' }, '/connexion': { page: 'auth' },
       '/inscription': { page: 'auth', authMode: 'signup' }, '/mot-de-passe-oublie': { page: 'auth', authMode: 'reset' },
-      '/jeux': { page: 'games' }, '/communaute': { page: 'community' }, '/profil': { page: 'profile' }, '/premium': { page: 'premium' }, '/notifications': { page: 'notifications' }, '/a-propos': { page: 'about' }
+      '/jeux': { page: 'games' }, '/communaute': { page: 'community' }, '/profil': { page: 'profile' }, '/premium': { page: 'premium' }, '/abonnement': { page: 'subscription' }, '/admin': { page: 'adminDashboard' }, '/notifications': { page: 'notifications' }, '/a-propos': { page: 'about' }
     };
     return { ...(fixed[path] || fixed['/']), path };
   }
   function routeForCurrentPage(id) {
     if (id === 'games') return `/${state.activeGame.toLowerCase()}${state.gameSection && state.gameSection !== 'overview' ? '/' + state.gameSection : ''}`;
-    return ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil', premium: '/premium', notifications: '/notifications', about: '/a-propos' })[id] || '/accueil';
+    return ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil', premium: '/premium', subscription: '/abonnement', adminDashboard: '/admin', notifications: '/notifications', about: '/a-propos' })[id] || '/accueil';
   }
   function syncRouteFromUrl() {
     const route = parseRoute();
@@ -102,7 +105,8 @@
     document.querySelectorAll('[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page === id));
     if (id === 'games') renderGame();
     if (id === 'profile') authUI();
-    if (id === 'premium') loadPremiumAccess();
+    if (id === 'premium' || id === 'subscription') loadPremiumAccess();
+    if (id === 'adminDashboard') { if (!isPremiumAdmin()) { showPage('home', updateUrl); return; } $('premiumAdminDashboard')?.classList.remove('hide'); $('premiumAdminPanel')?.classList.remove('hide'); loadPremiumPaymentRequests(); }
     if (id === 'notifications') loadNotifications();
     if (updateUrl) history.pushState({}, '', routeForCurrentPage(id));
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -220,6 +224,7 @@
     $('authStepOne')?.classList.toggle('active', step === 1);
     $('authStepTwo')?.classList.toggle('active', step === 2);
     $('backAuthStep')?.classList.toggle('hide', !(signup && step === 2));
+    $('backToLogin')?.classList.toggle('hide', mode === 'login');
     $('updatePassword')?.classList.toggle('hide', !update);
     $('login').classList.toggle('hide', signup || reset || update);
     $('signup').classList.toggle('hide', reset || update);
@@ -308,6 +313,7 @@
       runAuth('reset');
     });
     $('backAuthStep')?.addEventListener('click', () => { setAuthFlow('signup', 1); msg('authmsg', 'Modifiez vos informations si nécessaire.'); });
+    $('backToLogin')?.addEventListener('click', () => { history.pushState({}, '', '/connexion'); setAuthFlow('login'); msg('authmsg', 'Vous pouvez maintenant vous connecter.'); });
     $('updatePassword')?.addEventListener('click', () => runAuth('updatePassword'));
     $('confirmPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runAuth('signup'); } });
     $('password').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runAuth(authMode === 'signup' ? 'signup' : 'login'); } });
@@ -382,22 +388,12 @@
     const statusMsg = $('premiumAdminMessage');
     if (decision === 'approved' && !confirm(`Confirmez-vous avoir vérifié le paiement ${req.transaction_ref} de ${Number(req.amount_ariary).toLocaleString('fr-FR')} Ar ? Cela activera ${Number(req.duration_days || 30)} jours de Premium.`)) return;
     try {
-      if (decision === 'approved') {
-        const { data: existing, error: existingError } = await db.from('premium_subscriptions').select('expires_at').eq('user_id',req.user_id).maybeSingle();
-        if (existingError) throw existingError;
-        const now = Date.now();
-        const existingExpiry = existing?.expires_at ? new Date(existing.expires_at).getTime() : 0;
-        const base = Number.isFinite(existingExpiry) && existingExpiry > now ? existingExpiry : now;
-        const days = Math.max(1, Math.min(365, Number(req.duration_days || 30)));
-        const { error: subError } = await db.from('premium_subscriptions').upsert({user_id:req.user_id,status:'active',expires_at:new Date(base+days*24*60*60*1000).toISOString(),updated_at:new Date().toISOString()},{onConflict:'user_id'});
-        if (subError) throw subError;
-      }
-      const { error } = await db.from('premium_payment_requests').update({status:decision,reviewed_at:new Date().toISOString(),reviewed_by:state.user.id}).eq('id',req.id).eq('status','pending');
+      const { error } = await db.rpc('stratx_review_premium_request', { p_request_id: Number(req.id), p_decision: decision });
       if (error) throw error;
-      if (statusMsg) statusMsg.textContent = decision === 'approved' ? `Paiement validé : accès Premium activé pour ${Number(req.duration_days || 30)} jours. Une notification sera envoyée au membre.` : 'Demande refusée. Une notification sera envoyée au membre.';
+      if (statusMsg) statusMsg.textContent = decision === 'approved' ? `Paiement validé : accès Premium activé pour ${Number(req.duration_days || 30)} jours. Une notification a été créée pour le membre.` : 'Demande refusée. Une notification a été créée pour le membre.';
       await loadPremiumPaymentRequests();
       if (req.user_id === state.user.id) await loadPremiumAccess();
-    } catch (error) { if(statusMsg) statusMsg.textContent = `Erreur : ${friendlyError(error)}`; }
+    } catch (error) { if(statusMsg) statusMsg.textContent = `Erreur : ${friendlyError(error)}. Vérifiez que premium_access.sql a été réexécuté.`; }
   }
   async function loadMyPremiumRequests() {
     if (!db || !state.user) return;
@@ -744,8 +740,9 @@
     const stability = $('premiumPriceStability');
     if (stability) stability.textContent = `Tarif stable jusqu’au ${plan.nextChange.toLocaleString('fr-FR', {dateStyle:'medium',timeStyle:'short'})}. Plages : 7 jours ${plan.p7.toLocaleString('fr-FR')} Ar · 30 jours ${plan.p30.toLocaleString('fr-FR')} Ar.`;
   }
-  $('premiumDurationDays')?.addEventListener('input', updatePremiumPlan);
+  $('premiumDurationDays')?.addEventListener('input', () => { if ($('premiumDurationExact')) $('premiumDurationExact').value = $('premiumDurationDays').value; updatePremiumPlan(); });
   $('premiumDurationDays')?.addEventListener('change', updatePremiumPlan);
+  $('premiumDurationExact')?.addEventListener('input', () => { const field=$('premiumDurationExact'); const n=Number(field.value); if (!Number.isFinite(n) || n < 1) return; const d=Math.min(365,Math.floor(n)); $('premiumDurationDays').value=String(d); $('premiumDaysValue').textContent=String(d); updatePremiumPlan(); });
   updatePremiumPlan();
   $('premiumPaymentMethod')?.addEventListener('change', updatePaymentDestination);
   $('copyPaymentNumber')?.addEventListener('click', async () => {
@@ -794,7 +791,8 @@
     if (!db) { setStatus('Supabase indisponible',false); msg('authmsg','Impossible de charger Supabase. Vérifiez la connexion Internet ou la configuration de la bibliothèque.',true); return; }
     try {
       const { data, error } = await db.auth.getSession(); if(error) throw error; state.user=data.session?.user || null; authUI();
-      if(state.user) { setStatus('Connecté'); await refresh(); await loadPremiumAccess(); syncRouteFromUrl(); } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
+      if (window.location.hash.includes('type=recovery') || new URLSearchParams(window.location.search).get('recovery') === '1') { $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); setAuthFlow('updatePassword'); msg('authmsg','Lien de réinitialisation détecté. Saisissez votre nouveau mot de passe.'); }
+      if(state.user) { setStatus('Connecté'); await refresh(); await loadPremiumAccess(); if (!(window.location.hash.includes('type=recovery') || new URLSearchParams(window.location.search).get('recovery') === '1')) syncRouteFromUrl(); } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
       db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide'); history.replaceState({}, '', '/mot-de-passe-oublie'); setAuthFlow('updatePassword'); msg('authmsg', 'Lien vérifié. Choisissez maintenant un nouveau mot de passe.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; loadPremiumAccess(); } });
     } catch(error) { setStatus('Erreur de connexion',false); msg('authmsg',friendlyError(error),true); console.error('StratX auth init:',error); }
   }
