@@ -329,3 +329,23 @@ button{white-space:normal;overflow-wrap:anywhere}
 img,svg,video,canvas{max-width:100%;height:auto}
 @media(max-width:650px){.auth-layout:not(.auth-welcome){grid-template-columns:minmax(0,1fr);padding:20px 0 28px;gap:14px}.auth-layout:not(.auth-welcome) .auth-card{justify-self:stretch;margin:0;padding:20px}.auth-welcome .auth-story:after{font-size:48px}.auth-welcome .auth-sports-art{height:clamp(205px,32vh,280px);margin-top:6px}.auth-welcome .auth-card{padding-top:8px}.auth-welcome .auth-actions .btn{min-height:55px;font-size:15px}.main-nav .nav-item{min-width:0;max-width:none}.welcome-row,.section-heading,.surface-head,.form-end{min-width:0;flex-wrap:wrap}.premium-admin-actions{min-width:0}}
 @media(max-height:700px) and (max-width:650px){.auth-layout.auth-welcome{padding-top:18px}.auth-welcome .auth-sports-art{height:205px}.auth-welcome .auth-story:before{height:34px;font-size:31px}.auth-welcome .auth-story:after{font-size:42px}.auth-welcome .auth-actions .btn{min-height:49px}}
+
+/* StratX navigation refresh: normal document flow prevents scroll overlap/repaint issues. */
+.topbar{position:relative;top:auto;backdrop-filter:none;min-height:76px;height:auto;flex-wrap:wrap;gap:12px;padding-top:12px;padding-bottom:12px}
+.top-right{flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.main-nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px;margin:0 0 26px;border:1px solid #29313c;border-radius:18px;background:linear-gradient(145deg,#11161e,#0b0e13);}
+.nav-item{width:100%;min-width:0;min-height:58px;justify-content:flex-start;white-space:normal;overflow-wrap:anywhere;padding:12px 14px;border-color:#292f38;background:#10141a;}
+.nav-item .nav-label{line-height:1.25}
+.nav-item.active{box-shadow:inset 0 0 0 1px #8d6d32,0 5px 18px #0002}
+#adminDashboard .premium-admin-dashboard{margin-bottom:18px}
+.admin-command-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 18px}
+.admin-command-card{min-width:0;min-height:120px;padding:18px;border:1px solid #343b47;border-radius:16px;background:linear-gradient(145deg,#171d26,#101319);display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:12px;text-align:left;color:var(--text);transition:border-color .18s,transform .18s,background .18s}
+.admin-command-card:hover{border-color:#b18b43;transform:translateY(-2px);background:linear-gradient(145deg,#292317,#11151b)}
+.admin-command-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#302719;color:#f0ce7a;font-size:21px}
+.admin-command-card b{font-size:13px;line-height:1.35}
+.admin-command-card small{font-size:10px;color:var(--muted);line-height:1.4}
+#adminDashboard .premium-admin-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+#adminDashboard .premium-admin-stats article{min-width:0}
+#adminDashboard .premium-admin-panel{margin-top:16px}
+@media(max-width:760px){.main-nav{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px}.nav-item{min-height:54px;padding:10px 11px}.admin-command-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.shell{padding-left:16px;padding-right:16px}}
+@media(max-width:420px){.main-nav{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.nav-item{gap:7px;font-size:11px;padding:9px;min-height:52px}.nav-icon{font-size:16px}.admin-command-grid{gap:8px}.admin-command-card{padding:13px;min-height:112px}.topbar{align-items:flex-start}.top-right{justify-content:flex-start}}
