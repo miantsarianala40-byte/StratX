@@ -45,8 +45,6 @@
     const displayName = meta.display_name || 'Membre StratX';
     say('welcomeName', displayName);
     say('profileDisplayName', displayName);
-    say('profileemail', state.user.email || 'E-mail non disponible');
-    say('profileEmailReadonly', state.user.email || '');
     say('profileid', state.user.id || '');
     say('avatarInitials', initials(displayName));
     say('memberSince', state.user.created_at ? `Membre depuis le ${new Date(state.user.created_at).toLocaleDateString('fr-FR')}` : 'Compte utilisateur');
@@ -74,12 +72,22 @@
     if (window.location.pathname !== '/mot-de-passe-oublie') history.replaceState({}, '', '/mot-de-passe-oublie');
   }
   function parseRoute() {
-    const path = decodeURIComponent(window.location.pathname).replace(/\/+$/, '') || '/';
+    const rawPath = decodeURIComponent(window.location.pathname).replace(/\/+$/, '') || '/';
+    const path = rawPath;
     const parts = path.split('/').filter(Boolean);
     const first = (parts[0] || '').toLowerCase();
     if (gameSlug[first]) {
       const section = (parts[1] || 'overview').toLowerCase();
       return { page: 'games', game: gameSlug[first], section: gameRouteSections.has(section) ? section : 'overview', path };
+    }
+    if (first === 'admin' && parts[1]) {
+      const adminSubroutes = {
+        abonnement: { page: 'subscription' }, premium: { page: 'premium' },
+        notifications: { page: 'notifications' }, communaute: { page: 'community' },
+        profil: { page: 'profile' }, observations: { page: 'games' }
+      };
+      const subroute = adminSubroutes[parts[1].toLowerCase()];
+      if (subroute) return { ...subroute, adminPath: true, path };
     }
     const fixed = {
       '/': { page: 'home' }, '/accueil': { page: 'home' }, '/connexion': { page: 'auth' },
@@ -90,7 +98,12 @@
   }
   function routeForCurrentPage(id) {
     if (id === 'games') return `/${state.activeGame.toLowerCase()}${state.gameSection && state.gameSection !== 'overview' ? '/' + state.gameSection : ''}`;
-    return ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil', premium: '/premium', subscription: '/abonnement', adminDashboard: '/admin', notifications: '/notifications', about: '/a-propos' })[id] || '/accueil';
+    const base = ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil', premium: '/premium', subscription: '/abonnement', adminDashboard: '/admin/', notifications: '/notifications', about: '/a-propos' })[id] || '/accueil';
+    if (state.user?.app_metadata?.role === 'admin') {
+      const adminPaths = { subscription: '/admin/abonnement/', premium: '/admin/premium/', notifications: '/admin/notifications/', community: '/admin/communaute/', profile: '/admin/profil/', games: '/admin/observations/' };
+      if (adminPaths[id]) return adminPaths[id];
+    }
+    return base;
   }
   function syncRouteFromUrl() {
     const route = parseRoute();
@@ -110,6 +123,10 @@
       document.querySelectorAll('.game-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.game === route.game));
     }
     showPage(route.page, false);
+    if (route.adminPath) {
+      const canonical = routeForCurrentPage(route.page);
+      if (window.location.pathname !== canonical) history.replaceState({}, '', canonical);
+    }
     if (route.page === 'auth' && route.authMode === 'reset') setAuthFlow('reset');
   }
   function showPage(id, updateUrl = true) {
@@ -812,6 +829,13 @@
     } catch (error) { msg('premiumRequestMessage',friendlyError(error),true); }
     finally { button.disabled = false; }
   });
+  document.querySelectorAll('[data-admin-action]').forEach(button => button.addEventListener('click', () => {
+    if (!isPremiumAdmin()) return;
+    const action = button.dataset.adminAction;
+    if (action === 'requests') { $('premiumAdminPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); loadPremiumPaymentRequests(); return; }
+    const target = { subscription: 'subscription', announcements: 'notifications', community: 'community' }[action];
+    if (target) showPage(target);
+  }));
   $('premiumAdminRefresh')?.addEventListener('click',loadPremiumPaymentRequests);
 
   // Reduce casual copying of page text while preserving normal form-field editing.
