@@ -212,6 +212,8 @@
     $('signupNameWrap')?.classList.toggle('hide', !signup || step !== 1);
     $('emailField')?.classList.toggle('hide', update || (signup && step !== 1));
     $('passwordField')?.classList.toggle('hide', reset || (signup && step !== 2));
+    $('confirmPasswordField')?.classList.toggle('hide', !signup || step !== 2);
+    $('confirmPassword')?.toggleAttribute('required', signup && step === 2);
     $('authSteps')?.classList.toggle('hide', !signup);
     $('authStepOne')?.classList.toggle('active', step === 1);
     $('authStepTwo')?.classList.toggle('active', step === 2);
@@ -237,6 +239,7 @@
     if (action !== 'updatePassword' && (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) { msg('authmsg', 'Saisissez une adresse e-mail valide.', true); $('email')?.focus(); return; }
     if (action !== 'reset' && password.length < 6) { msg('authmsg', 'Le mot de passe doit contenir au moins 6 caractères.', true); $('password')?.focus(); return; }
     if (action === 'signup') {
+      if (password !== ($('confirmPassword')?.value || '')) { msg('authmsg', 'Les deux mots de passe ne correspondent pas.', true); $('confirmPassword')?.focus(); return; }
       const displayName = $('signupName')?.value.trim() || '';
       if (displayName.length < 2) { msg('authmsg', 'Saisissez le nom qui sera affiché dans StratX.', true); $('signupName')?.focus(); return; }
     }
@@ -302,6 +305,7 @@
     });
     $('backAuthStep')?.addEventListener('click', () => { setAuthFlow('signup', 1); msg('authmsg', 'Modifiez vos informations si nécessaire.'); });
     $('updatePassword')?.addEventListener('click', () => runAuth('updatePassword'));
+    $('confirmPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runAuth('signup'); } });
     $('password').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runAuth(authMode === 'signup' ? 'signup' : 'login'); } });
     $('togglePassword').addEventListener('click', () => { const p=$('password'); p.type = p.type === 'password' ? 'text' : 'password'; });
     $('logout').addEventListener('click', signOut); $('profileLogout').addEventListener('click', signOut); $('refresh').addEventListener('click', refresh);
@@ -386,7 +390,7 @@
       }
       const { error } = await db.from('premium_payment_requests').update({status:decision,reviewed_at:new Date().toISOString(),reviewed_by:state.user.id}).eq('id',req.id).eq('status','pending');
       if (error) throw error;
-      if (statusMsg) statusMsg.textContent = decision === 'approved' ? `Paiement validé : accès Premium activé pour ${Number(req.duration_days || 30)} jours.` : 'Demande refusée.';
+      if (statusMsg) statusMsg.textContent = decision === 'approved' ? `Paiement validé : accès Premium activé pour ${Number(req.duration_days || 30)} jours. Une notification sera envoyée au membre.` : 'Demande refusée. Une notification sera envoyée au membre.';
       await loadPremiumPaymentRequests();
       if (req.user_id === state.user.id) await loadPremiumAccess();
     } catch (error) { if(statusMsg) statusMsg.textContent = `Erreur : ${friendlyError(error)}`; }
@@ -688,15 +692,45 @@
     $('notificationAdminComposer')?.classList.toggle('hide', !isPremiumAdmin());
     if (!db || !state.user) { list.textContent = 'Connectez-vous pour consulter vos notifications.'; return; }
     try {
-      const { data, error } = await db.from('stratx_announcements').select('id,title,body,created_at').eq('published',true).order('created_at',{ascending:false}).limit(100);
-      if (error) throw error;
-      const notices = data || [];
+      const [announcementResult, personalResult] = await Promise.all([
+        db.from('stratx_announcements').select('id,title,body,created_at').eq('published',true).order('created_at',{ascending:false}).limit(100),
+        db.from('stratx_user_notifications').select('id,title,body,created_at,kind').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(100)
+      ]);
+      if (announcementResult.error) throw announcementResult.error;
+      if (personalResult.error && !/does not exist/i.test(personalResult.error.message || '')) throw personalResult.error;
+      const notices = [ ...(personalResult.data || []).map(n=>({...n,kind:n.kind||'account'})), ...(announcementResult.data || []).map(n=>({...n,kind:'announcement'})) ].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
       if (!notices.length) { const empty=document.createElement('div');empty.className='empty-state';empty.textContent='Aucune nouvelle notification pour le moment.';list.append(empty); }
-      notices.forEach(n=>{ const card=document.createElement('button');card.type='button';card.className='notification-card';const icon=document.createElement('span');icon.className='notification-card-icon';icon.textContent='✦';const content=document.createElement('div');const title=document.createElement('b');title.textContent=n.title;const body=document.createElement('p');body.textContent=n.body.length>180?n.body.slice(0,180)+'…':n.body;const meta=document.createElement('small');meta.textContent=`Annonce StratX · ${formatDate(n.created_at)}`;content.append(title,body,meta);card.append(icon,content);card.addEventListener('click',()=>{const modal=document.createElement('div');modal.className='notification-reader-backdrop';const box=document.createElement('article');box.className='notification-reader';const close=document.createElement('button');close.className='btn btn-outline';close.type='button';close.textContent='Fermer';const h=document.createElement('h3');h.textContent=n.title;const p=document.createElement('p');p.textContent=n.body;const d=document.createElement('small');d.textContent=formatDate(n.created_at);close.addEventListener('click',()=>modal.remove());box.append(close,h,p,d);modal.append(box);modal.addEventListener('click',e=>{if(e.target===modal)modal.remove()});document.body.append(modal);});list.append(card);});
+      notices.forEach(n=>{ const card=document.createElement('button');card.type='button';card.className='notification-card';const icon=document.createElement('span');icon.className='notification-card-icon';icon.textContent=n.kind==='premium_request'?'♛':n.kind==='premium_approved'?'✓':n.kind==='premium_rejected'?'!':'✦';const content=document.createElement('div');const title=document.createElement('b');title.textContent=n.title;const body=document.createElement('p');body.textContent=(n.body||'').length>180?n.body.slice(0,180)+'…':(n.body||'');const meta=document.createElement('small');meta.textContent=`${n.kind==='announcement'?'Annonce StratX':'Notification de compte'} · ${formatDate(n.created_at)}`;content.append(title,body,meta);card.append(icon,content);card.addEventListener('click',()=>{const modal=document.createElement('div');modal.className='notification-reader-backdrop';const box=document.createElement('article');box.className='notification-reader';const close=document.createElement('button');close.className='btn btn-outline';close.type='button';close.textContent='Fermer';const h=document.createElement('h3');h.textContent=n.title;const p=document.createElement('p');p.textContent=n.body||'';const d=document.createElement('small');d.textContent=formatDate(n.created_at);close.addEventListener('click',()=>modal.remove());box.append(close,h,p,d);modal.append(box);modal.addEventListener('click',e=>{if(e.target===modal)modal.remove()});document.body.append(modal);});list.append(card);});
       const badge=$('notificationBadge');if(badge){badge.textContent=String(notices.length);badge.classList.toggle('hide',!notices.length);}
     } catch(error) { const p=document.createElement('p');p.className='message';p.textContent=`Impossible de charger les notifications : ${friendlyError(error)}. Vérifiez premium_access.sql.`;list.append(p); }
   }
+  async function loadVideoAd() {
+    const admin=isPremiumAdmin(); $('videoAdAdmin')?.classList.toggle('hide',!admin);
+    if(!db){return;}
+    try {
+      const {data,error}=await db.from('stratx_video_ads').select('title,description,video_url,click_url').eq('published',true).order('created_at',{ascending:false}).limit(1).maybeSingle();
+      if(error) throw error;
+      const video=$('stratxAdVideo');
+      if(!data){if(video){video.hidden=true;video.removeAttribute('src');video.load();} $('videoAdEmpty')?.classList.remove('hide');return;}
+      say('videoAdTitle',data.title||'Publicité StratX');say('videoAdDescription',data.description||'');
+      if(video){video.src=data.video_url;video.hidden=false;video.load();}
+      $('videoAdEmpty')?.classList.add('hide');
+      const link=$('videoAdLink');if(link){if(data.click_url){link.href=data.click_url;link.classList.remove('hide');}else link.classList.add('hide');}
+      if(admin){$('videoAdUrl').value=data.video_url||'';$('videoAdEditTitle').value=data.title||'';$('videoAdEditDescription').value=data.description||'';$('videoAdEditLink').value=data.click_url||'';}
+    }catch(error){say('videoAdMessage',`Vidéo publicitaire : ${friendlyError(error)}. Exécutez premium_access.sql mis à jour.`);}
+  }
+  $('saveVideoAd')?.addEventListener('click',async()=>{
+    if(!isPremiumAdmin()||!db||!state.user)return;
+    const url=$('videoAdUrl').value.trim(),title=$('videoAdEditTitle').value.trim(),description=$('videoAdEditDescription').value.trim(),click=$('videoAdEditLink').value.trim();
+    if(!/^https?:\/\//i.test(url)){say('videoAdMessage','Entrez une URL HTTPS/HTTP directe vers un fichier vidéo MP4 ou WebM.');return;}
+    const btn=$('saveVideoAd');btn.disabled=true;
+    try{const {error}=await db.from('stratx_video_ads').update({published:false,updated_at:new Date().toISOString()}).eq('published',true);if(error)throw error;const {error:insertError}=await db.from('stratx_video_ads').insert({title:title||'Publicité StratX',description,video_url:url,click_url:click||null,created_by:state.user.id,published:true});if(insertError)throw insertError;say('videoAdMessage','Vidéo publiée et visible dans l’espace publicitaire.');await loadVideoAd();}
+    catch(error){say('videoAdMessage',`Publication impossible : ${friendlyError(error)}`);}finally{btn.disabled=false;}
+  });
   $('notificationRefresh')?.addEventListener('click',loadNotifications);
+  window.setInterval(()=>{if(state.user){loadNotifications();if(isPremiumAdmin())loadPremiumPaymentRequests();}},25000);
+  $('videoAdCard')?.addEventListener('click',()=>{if(state.user)loadVideoAd();});
+
   $('notificationAdminForm')?.addEventListener('submit',async e=>{e.preventDefault();if(!isPremiumAdmin()||!db||!state.user)return;const title=$('noticeTitle').value.trim(),body=$('noticeBody').value.trim();const button=e.submitter;if(button)button.disabled=true;try{const {error}=await db.from('stratx_announcements').insert({title,body,created_by:state.user.id,published:true});if(error)throw error;$('notificationAdminForm').reset();say('notificationMessage','Annonce publiée. Elle sera visible dans le centre de notifications des membres.');await loadNotifications();}catch(error){say('notificationMessage',`Publication impossible : ${friendlyError(error)}`);}finally{if(button)button.disabled=false;}});
 
   // Prix globaux stables par fenêtre de 3 jours : ils ne changent pas à chaque calcul ni à chaque seconde.
@@ -781,7 +815,7 @@
     try {
       const { data, error } = await db.auth.getSession(); if(error) throw error; state.user=data.session?.user || null; authUI();
       if(state.user) { setStatus('Connecté'); await refresh(); await loadPremiumAccess(); syncRouteFromUrl(); } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
-      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide'); history.replaceState({}, '', '/mot-de-passe-oublie'); setAuthFlow('updatePassword'); msg('authmsg', 'Lien vérifié. Choisissez maintenant un nouveau mot de passe.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; loadPremiumAccess(); } });
+      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide'); history.replaceState({}, '', '/mot-de-passe-oublie'); setAuthFlow('updatePassword'); msg('authmsg', 'Lien vérifié. Choisissez maintenant un nouveau mot de passe.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); loadVideoAd(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; loadPremiumAccess(); } });
     } catch(error) { setStatus('Erreur de connexion',false); msg('authmsg',friendlyError(error),true); console.error('StratX auth init:',error); }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
