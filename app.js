@@ -70,8 +70,13 @@
     $('app')?.classList.add('hide');
     $('logout')?.classList.add('hide');
     setAuthFlow('updatePassword');
+    // Keep the recovery form as the only usable screen until a password is saved.
+    $('password')?.setAttribute('autocomplete', 'new-password');
+    $('password')?.setAttribute('required', '');
+    $('confirmPassword')?.setAttribute('required', '');
     if (message) msg('authmsg', message);
-    if (window.location.pathname !== '/mot-de-passe-oublie') history.replaceState({}, '', '/mot-de-passe-oublie');
+    // Preserve the recovery query marker; Supabase has already processed the token before this is called.
+    if (window.location.pathname !== '/mot-de-passe-oublie') history.replaceState({}, '', '/mot-de-passe-oublie?recovery=1');
   }
   function parseRoute() {
     const path = decodeURIComponent(window.location.pathname).replace(/\/+$/, '') || '/';
@@ -293,13 +298,24 @@
         }
       } else if (action === 'updatePassword') {
         if (!recoveryMode) throw new Error('Ouvrez d’abord le lien de réinitialisation reçu par e-mail.');
+        const confirmation = ($('confirmPassword')?.value || '');
+        if (password.length < 6) throw new Error('Le nouveau mot de passe doit contenir au moins 6 caractères.');
+        if (password !== confirmation) { $('confirmPassword')?.focus(); throw new Error('Les deux mots de passe ne correspondent pas.'); }
         recoverySaving = true;
         $('updatePassword').disabled = true;
         const { data, error } = await db.auth.updateUser({ password });
         if (error) throw error;
-        // Supabase revokes refresh sessions for other devices while keeping this recovery session.
-        const { error: revokeError } = await db.auth.signOut({ scope: 'others' });
-        if (revokeError) throw new Error('Le mot de passe a été modifié, mais Supabase n’a pas confirmé la fermeture des autres sessions. Réessayez ou contactez le support.');
+
+        // Do not keep the user trapped if the password update succeeded but session revocation fails.
+        let otherSessionsRevoked = false;
+        try {
+          const { error: revokeError } = await db.auth.signOut({ scope: 'others' });
+          otherSessionsRevoked = !revokeError;
+          if (revokeError) console.warn('StratX: password updated but other-session sign-out failed:', revokeError);
+        } catch (revokeError) {
+          console.warn('StratX: password updated but other-session sign-out failed:', revokeError);
+        }
+
         recoveryMode = false;
         recoverySaving = false;
         state.user = data?.user || state.user;
@@ -308,7 +324,9 @@
         $('auth')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
         showPage('home', false);
         await refresh();
-        msg('authmsg', 'Mot de passe modifié. Les autres sessions ont été déconnectées et vous pouvez maintenant utiliser StratX.');
+        msg('authmsg', otherSessionsRevoked
+          ? 'Mot de passe modifié. La demande de fermeture des autres sessions a réussi.'
+          : 'Mot de passe modifié avec succès. Cependant, la fermeture des autres sessions n’a pas pu être confirmée. Déconnectez manuellement les autres appareils et vérifiez la configuration Supabase.');
       } else {
         const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/mot-de-passe-oublie' });
         if (error) throw error;
@@ -821,8 +839,12 @@
     document.addEventListener('click', event => { if (!recoveryMode) return; const authCard = $('auth'); if (authCard && !authCard.contains(event.target)) { event.preventDefault(); event.stopImmediatePropagation(); lockRecoveryInterface('Tsy maintsy mamorona mot de passe vaovao aloha ianao.'); } }, true);
     if (!db) { setStatus('Supabase indisponible',false); msg('authmsg','Impossible de charger Supabase. Vérifiez la connexion Internet ou la configuration de la bibliothèque.',true); return; }
     try {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const queryParams = new URLSearchParams(window.location.search);
+      recoveryMode = hashParams.get('type') === 'recovery' ||
+        queryParams.get('type') === 'recovery' ||
+        queryParams.get('recovery') === '1';
       const { data, error } = await db.auth.getSession(); if(error) throw error; state.user=data.session?.user || null; authUI();
-      recoveryMode = window.location.hash.includes('type=recovery') || new URLSearchParams(window.location.search).get('recovery') === '1';
       if (recoveryMode) lockRecoveryInterface('Lien de réinitialisation détecté. Choisissez et confirmez un nouveau mot de passe pour continuer.');
       if(state.user) { setStatus('Connecté'); if (!recoveryMode) { await refresh(); await loadPremiumAccess(); syncRouteFromUrl(); } } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
       db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { recoveryMode = true; lockRecoveryInterface('Lien vérifié. Choisissez et confirmez maintenant un nouveau mot de passe pour accéder à StratX.'); return; } if (recoveryMode) { lockRecoveryInterface('La réinitialisation est obligatoire avant de pouvoir accéder à StratX.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; loadPremiumAccess(); } });
