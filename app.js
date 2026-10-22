@@ -89,7 +89,14 @@
         profil: { page: 'profile' }, observations: { page: 'games' }
       };
       const subroute = adminSubroutes[parts[1].toLowerCase()];
-      if (subroute) return { ...subroute, adminPath: true, path };
+      if (subroute) {
+        // Les observations Admin acceptent un jeu explicite dans l’URL :
+        // /admin/observations/cosmox, /jetx ou /aviator.
+        const selectedGame = parts[1].toLowerCase() === 'observations' ? gameSlug[(parts[2] || '').toLowerCase()] : null;
+        const sectionPart = selectedGame ? parts[3] : (parts[1].toLowerCase() === 'observations' ? parts[2] : null);
+        const section = (sectionPart || 'overview').toLowerCase();
+        return { ...subroute, ...(selectedGame ? { game: selectedGame } : {}), section: gameRouteSections.has(section) ? section : 'overview', adminPath: true, path };
+      }
     }
     const fixed = {
       '/': { page: 'home' }, '/accueil': { page: 'home' }, '/connexion': { page: 'auth' },
@@ -99,10 +106,16 @@
     return { ...(fixed[path] || fixed['/']), path };
   }
   function routeForCurrentPage(id) {
-    if (id === 'games') return `/${state.activeGame.toLowerCase()}${state.gameSection && state.gameSection !== 'overview' ? '/' + state.gameSection : ''}`;
+    if (id === 'games') {
+      const gamePath = state.activeGame.toLowerCase();
+      const section = state.gameSection && state.gameSection !== 'overview' ? '/' + state.gameSection : '';
+      return state.user?.app_metadata?.role === 'admin'
+        ? `/admin/observations/${gamePath}${section}/`
+        : `/${gamePath}${section}`;
+    }
     const base = ({ home: '/accueil', auth: '/connexion', community: '/communaute', profile: '/profil', premium: '/premium', subscription: '/abonnement', adminDashboard: '/admin/', notifications: '/notifications', about: '/a-propos' })[id] || '/accueil';
     if (state.user?.app_metadata?.role === 'admin') {
-      const adminPaths = { subscription: '/admin/abonnement/', premium: '/admin/premium/', notifications: '/admin/notifications/', community: '/admin/communaute/', profile: '/admin/profil/', games: '/admin/observations/' };
+      const adminPaths = { subscription: '/admin/abonnement/', premium: '/admin/premium/', notifications: '/admin/notifications/', community: '/admin/communaute/', profile: '/admin/profil/' };
       if (adminPaths[id]) return adminPaths[id];
     }
     return base;
@@ -122,6 +135,7 @@
       state.activeGame = route.game;
       state.gameSection = route.section || 'overview';
       state.showGameHistory = state.gameSection === 'historique';
+      if ($('gamename')) $('gamename').value = state.activeGame;
       document.querySelectorAll('.game-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.game === route.game));
     }
     showPage(route.page, false);
