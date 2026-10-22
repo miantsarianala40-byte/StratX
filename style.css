@@ -374,3 +374,15 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .main-nav .nav-label{overflow-wrap:anywhere}
 .page[aria-hidden="true"]{display:none!important}
 @media(max-width:520px){#app{padding-top:58px}.menu-toggle{top:10px;right:10px;width:42px;height:40px}.main-nav:not([hidden]){top:58px;right:8px;width:calc(100% - 16px);grid-template-columns:repeat(2,minmax(0,1fr));padding:9px;gap:7px}.main-nav:not([hidden]) .nav-item{min-height:44px;font-size:12px}.main-nav:not([hidden]) .nav-icon{font-size:17px}}
+
+/* Menu hamburger discret : panneau compact, sans recouvrir toute la page. */
+.main-nav:not([hidden]){grid-template-columns:repeat(2,minmax(0,1fr))!important;width:min(340px,calc(100vw - 24px))!important;max-height:min(68vh,520px);overflow-y:auto;overscroll-behavior:contain;gap:6px!important;padding:10px!important;background:rgba(12,14,18,.97);box-shadow:0 10px 26px #0008!important}
+.main-nav:not([hidden]) .nav-item{min-height:40px!important;padding:7px 8px!important;justify-content:flex-start!important;gap:8px!important;font-size:12px}
+.main-nav .nav-icon{flex:0 0 20px;text-align:center}
+.nav-account-actions{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;border-top:1px solid #c5a34b55;margin-top:5px;padding-top:9px}
+.nav-account-actions button{min-width:0;min-height:38px;display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:8px 10px;border:1px solid #c5a34b44;border-radius:10px;background:#191a1d;color:#f2d27a;font:600 12px inherit;cursor:pointer}
+.nav-account-actions button span{overflow-wrap:anywhere}
+.nav-account-actions #navLogout{color:#e6e6e6;border-color:#ffffff22}
+@media(max-width:520px){.main-nav:not([hidden]){top:56px!important;right:8px!important;width:min(320px,calc(100vw - 16px))!important;max-height:65vh}.main-nav:not([hidden]) .nav-item{min-height:38px!important}.nav-account-actions button{font-size:11px;padding:7px}}
+/* Les raccourcis de compte sont regroupés dans le menu hamburger pour éviter les doublons. */
+.top-right #premiumShortcut,.top-right #subscriptionShortcut,.top-right #adminShortcut,.top-right #logout{display:none!important}

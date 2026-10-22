@@ -40,6 +40,8 @@
     $('premiumShortcut')?.classList.toggle('hide', !logged);
     $('subscriptionShortcut')?.classList.toggle('hide', !logged);
     $('adminShortcut')?.classList.toggle('hide', !logged || state.user?.app_metadata?.role !== 'admin');
+    $('navAdmin')?.classList.toggle('hide', !logged || state.user?.app_metadata?.role !== 'admin');
+    ['navPremium','navSubscription','navLogout'].forEach(id => $(id)?.classList.toggle('hide', !logged));
     if (!logged) return;
     const meta = state.user.user_metadata || {};
     const displayName = meta.display_name || 'Membre StratX';
@@ -344,6 +346,7 @@
   function bind() {
     const menuToggle = $('menuToggle');
     const mainNavigation = $('mainNavigation');
+    $('navLogout')?.addEventListener('click', () => { closeNavigation(); signOut(); });
     const closeNavigation = () => { if (!menuToggle || !mainNavigation) return; mainNavigation.hidden = true; menuToggle.setAttribute('aria-expanded', 'false'); menuToggle.setAttribute('aria-label', 'Ouvrir le menu'); menuToggle.classList.remove('is-open'); };
     menuToggle?.addEventListener('click', () => { if (!mainNavigation) return; const open = mainNavigation.hidden; mainNavigation.hidden = !open; menuToggle.setAttribute('aria-expanded', String(open)); menuToggle.setAttribute('aria-label', open ? 'Fermer le menu' : 'Ouvrir le menu'); menuToggle.classList.toggle('is-open', open); });
     document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => { showPage(btn.dataset.page); closeNavigation(); }));
