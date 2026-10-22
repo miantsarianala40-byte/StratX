@@ -134,6 +134,7 @@
     if (!$(`${id}`) || !$(`${id}`).classList.contains('page')) return;
     state.currentPage = id;
     document.querySelectorAll('.page').forEach(el => el.classList.toggle('hide', el.id !== id));
+    document.querySelectorAll('.page').forEach(el => { if (el.id !== id) el.setAttribute('aria-hidden', 'true'); else el.removeAttribute('aria-hidden'); });
     document.querySelectorAll('[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page === id));
     if (id === 'games') renderGame();
     if (id === 'profile') authUI();
@@ -341,8 +342,14 @@
   }
   async function signOut() { if (!db) return; const { error } = await db.auth.signOut(); if (error) msg('profilemsg', friendlyError(error), true); }
   function bind() {
-    document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
-    document.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.goto)));
+    const menuToggle = $('menuToggle');
+    const mainNavigation = $('mainNavigation');
+    const closeNavigation = () => { if (!menuToggle || !mainNavigation) return; mainNavigation.hidden = true; menuToggle.setAttribute('aria-expanded', 'false'); menuToggle.setAttribute('aria-label', 'Ouvrir le menu'); menuToggle.classList.remove('is-open'); };
+    menuToggle?.addEventListener('click', () => { if (!mainNavigation) return; const open = mainNavigation.hidden; mainNavigation.hidden = !open; menuToggle.setAttribute('aria-expanded', String(open)); menuToggle.setAttribute('aria-label', open ? 'Fermer le menu' : 'Ouvrir le menu'); menuToggle.classList.toggle('is-open', open); });
+    document.querySelectorAll('[data-page]').forEach(btn => btn.addEventListener('click', () => { showPage(btn.dataset.page); closeNavigation(); }));
+    document.addEventListener('click', e => { if (mainNavigation && menuToggle && !mainNavigation.hidden && !mainNavigation.contains(e.target) && !menuToggle.contains(e.target)) closeNavigation(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNavigation(); });
+    document.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => { showPage(btn.dataset.goto); const nav=$('mainNavigation'), toggle=$('menuToggle'); if(nav) nav.hidden=true; if(toggle){toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Ouvrir le menu');toggle.classList.remove('is-open');} }));
     document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.gameSection = 'overview'; state.showGameHistory = false; document.querySelectorAll('.game-tab').forEach(tab => tab.classList.toggle('active', tab === btn)); history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
     document.querySelectorAll('[data-game-section]').forEach(btn => btn.addEventListener('click', () => { const next = btn.dataset.gameSection; if (!['overview', ...gameRouteSections].includes(next)) return; state.gameSection = next; state.showGameHistory = next === 'historique'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
     $('toggleGameHistory')?.addEventListener('click', () => { state.showGameHistory = !state.showGameHistory; state.gameSection = state.showGameHistory ? 'historique' : 'overview'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); });
