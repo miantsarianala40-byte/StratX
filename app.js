@@ -70,13 +70,8 @@
     $('app')?.classList.add('hide');
     $('logout')?.classList.add('hide');
     setAuthFlow('updatePassword');
-    // Keep the recovery form as the only usable screen until a password is saved.
-    $('password')?.setAttribute('autocomplete', 'new-password');
-    $('password')?.setAttribute('required', '');
-    $('confirmPassword')?.setAttribute('required', '');
     if (message) msg('authmsg', message);
-    // Preserve the recovery query marker; Supabase has already processed the token before this is called.
-    if (window.location.pathname !== '/mot-de-passe-oublie') history.replaceState({}, '', '/mot-de-passe-oublie?recovery=1');
+    if (window.location.pathname !== '/mot-de-passe-oublie') history.replaceState({}, '', '/mot-de-passe-oublie');
   }
   function parseRoute() {
     const path = decodeURIComponent(window.location.pathname).replace(/\/+$/, '') || '/';
@@ -103,6 +98,7 @@
     if (!state.user) {
       $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide');
       if (route.page === 'auth') { if (route.authMode === 'signup') setAuthFlow('signup', 1); else if (route.authMode === 'reset') setAuthFlow('reset'); else setAuthFlow('login'); }
+      else if (route.path === '/') setAuthFlow('welcome');
       return;
     }
     $('auth')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
@@ -231,15 +227,18 @@
   }
   function setAuthFlow(mode, step = 1) {
     authMode = mode; signupStep = step; resetSent = false;
+    const welcome = mode === 'welcome';
     const signup = mode === 'signup', reset = mode === 'reset', update = mode === 'updatePassword';
-    $('signupNameWrap')?.classList.toggle('hide', !signup || step !== 1);
+    $('auth')?.classList.toggle('auth-welcome', welcome);
+    document.body.classList.toggle('welcome-screen', welcome);
+    $('signupNameWrap')?.classList.toggle('hide', welcome || !signup || step !== 1);
     // The stylesheet keeps this block hidden unless signup-mode is present.
     $('signupNameWrap')?.classList.toggle('signup-mode', signup && step === 1);
-    $('emailField')?.classList.toggle('hide', update || (signup && step !== 1));
-    $('passwordField')?.classList.toggle('hide', reset || (signup && step !== 2));
-    $('confirmPasswordField')?.classList.toggle('hide', !(signup && step === 2) && !update);
+    $('emailField')?.classList.toggle('hide', welcome || update || (signup && step !== 1));
+    $('passwordField')?.classList.toggle('hide', welcome || reset || (signup && step !== 2));
+    $('confirmPasswordField')?.classList.toggle('hide', welcome || (!(signup && step === 2) && !update));
     $('confirmPassword')?.toggleAttribute('required', (signup && step === 2) || update);
-    $('authSteps')?.classList.toggle('hide', !signup);
+    $('authSteps')?.classList.toggle('hide', welcome || !signup);
     $('authStepOne')?.classList.toggle('active', step === 1);
     $('authStepTwo')?.classList.toggle('active', step === 2);
     $('backAuthStep')?.classList.toggle('hide', !(signup && step === 2));
@@ -247,7 +246,7 @@
     $('updatePassword')?.classList.toggle('hide', !update);
     $('login').classList.toggle('hide', signup || reset || update);
     $('signup').classList.toggle('hide', reset || update);
-    $('resetPassword').classList.toggle('hide', signup || update);
+    $('resetPassword').classList.toggle('hide', welcome || signup || update);
     $('signupName').required = signup && step === 1;
     $('email').required = !signup || step === 1;
     $('password').required = !reset && (!signup || step === 2 || update);
@@ -255,7 +254,8 @@
     if (update && $('confirmPassword')) { $('confirmPassword').autocomplete = 'new-password'; $('confirmPassword').placeholder = 'Retapez le nouveau mot de passe'; }
     $('signup').innerHTML = signup ? (step === 1 ? 'Continuer <span>→</span>' : 'Créer mon compte <span>→</span>') : 'Créer mon compte';
     $('resetPassword').textContent = reset ? (resetSent ? 'Renvoyer le lien' : 'Envoyer le lien de réinitialisation') : 'Mot de passe oublié ?';
-    $('authIntro').textContent = signup ? (step === 1 ? 'Étape 1 sur 2 — renseignez votre identité et votre e-mail.' : 'Étape 2 sur 2 — choisissez un mot de passe sécurisé.') : reset ? 'Étape 1 : renseignez votre e-mail. Étape 2 : ouvrez le lien reçu pour choisir un nouveau mot de passe.' : update ? 'Dernière étape : choisissez un nouveau mot de passe sécurisé.' : 'Connectez-vous pour accéder à votre tableau de bord.';
+    $('authIntro').classList.toggle('hide', welcome);
+    $('authIntro').textContent = welcome ? 'Analyse. Stratégie. Performance.' : signup ? (step === 1 ? 'Étape 1 sur 2 — renseignez votre identité et votre e-mail.' : 'Étape 2 sur 2 — choisissez un mot de passe sécurisé.') : reset ? 'Étape 1 : renseignez votre e-mail. Étape 2 : ouvrez le lien reçu pour choisir un nouveau mot de passe.' : update ? 'Dernière étape : choisissez un nouveau mot de passe sécurisé.' : 'Connectez-vous pour accéder à votre tableau de bord.';
     if (signup && step === 1) $('signupName')?.focus();
     else if ((signup && step === 2) || update) $('password')?.focus();
   }
@@ -298,24 +298,13 @@
         }
       } else if (action === 'updatePassword') {
         if (!recoveryMode) throw new Error('Ouvrez d’abord le lien de réinitialisation reçu par e-mail.');
-        const confirmation = ($('confirmPassword')?.value || '');
-        if (password.length < 6) throw new Error('Le nouveau mot de passe doit contenir au moins 6 caractères.');
-        if (password !== confirmation) { $('confirmPassword')?.focus(); throw new Error('Les deux mots de passe ne correspondent pas.'); }
         recoverySaving = true;
         $('updatePassword').disabled = true;
         const { data, error } = await db.auth.updateUser({ password });
         if (error) throw error;
-
-        // Do not keep the user trapped if the password update succeeded but session revocation fails.
-        let otherSessionsRevoked = false;
-        try {
-          const { error: revokeError } = await db.auth.signOut({ scope: 'others' });
-          otherSessionsRevoked = !revokeError;
-          if (revokeError) console.warn('StratX: password updated but other-session sign-out failed:', revokeError);
-        } catch (revokeError) {
-          console.warn('StratX: password updated but other-session sign-out failed:', revokeError);
-        }
-
+        // Supabase revokes refresh sessions for other devices while keeping this recovery session.
+        const { error: revokeError } = await db.auth.signOut({ scope: 'others' });
+        if (revokeError) throw new Error('Le mot de passe a été modifié, mais Supabase n’a pas confirmé la fermeture des autres sessions. Réessayez ou contactez le support.');
         recoveryMode = false;
         recoverySaving = false;
         state.user = data?.user || state.user;
@@ -324,9 +313,7 @@
         $('auth')?.classList.add('hide'); $('app')?.classList.remove('hide'); $('logout')?.classList.remove('hide');
         showPage('home', false);
         await refresh();
-        msg('authmsg', otherSessionsRevoked
-          ? 'Mot de passe modifié. La demande de fermeture des autres sessions a réussi.'
-          : 'Mot de passe modifié avec succès. Cependant, la fermeture des autres sessions n’a pas pu être confirmée. Déconnectez manuellement les autres appareils et vérifiez la configuration Supabase.');
+        msg('authmsg', 'Mot de passe modifié. Les autres sessions ont été déconnectées et vous pouvez maintenant utiliser StratX.');
       } else {
         const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/mot-de-passe-oublie' });
         if (error) throw error;
@@ -342,7 +329,7 @@
     document.querySelectorAll('.game-tab').forEach(btn => btn.addEventListener('click', () => { state.activeGame = btn.dataset.game; state.gameSection = 'overview'; state.showGameHistory = false; document.querySelectorAll('.game-tab').forEach(tab => tab.classList.toggle('active', tab === btn)); history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
     document.querySelectorAll('[data-game-section]').forEach(btn => btn.addEventListener('click', () => { const next = btn.dataset.gameSection; if (!['overview', ...gameRouteSections].includes(next)) return; state.gameSection = next; state.showGameHistory = next === 'historique'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); }));
     $('toggleGameHistory')?.addEventListener('click', () => { state.showGameHistory = !state.showGameHistory; state.gameSection = state.showGameHistory ? 'historique' : 'overview'; history.pushState({}, '', routeForCurrentPage('games')); renderGame(); });
-    $('login').addEventListener('click', () => { history.pushState({}, '', '/connexion'); setAuthFlow('login'); runAuth('login'); });
+    $('login').addEventListener('click', () => { if (authMode === 'welcome') { history.pushState({}, '', '/connexion'); setAuthFlow('login'); $('email')?.focus(); return; } history.pushState({}, '', '/connexion'); setAuthFlow('login'); runAuth('login'); });
     $('signup').addEventListener('click', () => {
       if (authMode !== 'signup') { history.pushState({}, '', '/inscription'); setAuthFlow('signup', 1); msg('authmsg', 'Étape 1 : saisissez votre nom affiché et votre adresse e-mail.'); return; }
       if (signupStep === 1) {
@@ -839,12 +826,8 @@
     document.addEventListener('click', event => { if (!recoveryMode) return; const authCard = $('auth'); if (authCard && !authCard.contains(event.target)) { event.preventDefault(); event.stopImmediatePropagation(); lockRecoveryInterface('Tsy maintsy mamorona mot de passe vaovao aloha ianao.'); } }, true);
     if (!db) { setStatus('Supabase indisponible',false); msg('authmsg','Impossible de charger Supabase. Vérifiez la connexion Internet ou la configuration de la bibliothèque.',true); return; }
     try {
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-      const queryParams = new URLSearchParams(window.location.search);
-      recoveryMode = hashParams.get('type') === 'recovery' ||
-        queryParams.get('type') === 'recovery' ||
-        queryParams.get('recovery') === '1';
       const { data, error } = await db.auth.getSession(); if(error) throw error; state.user=data.session?.user || null; authUI();
+      recoveryMode = window.location.hash.includes('type=recovery') || new URLSearchParams(window.location.search).get('recovery') === '1';
       if (recoveryMode) lockRecoveryInterface('Lien de réinitialisation détecté. Choisissez et confirmez un nouveau mot de passe pour continuer.');
       if(state.user) { setStatus('Connecté'); if (!recoveryMode) { await refresh(); await loadPremiumAccess(); syncRouteFromUrl(); } } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
       db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { recoveryMode = true; lockRecoveryInterface('Lien vérifié. Choisissez et confirmez maintenant un nouveau mot de passe pour accéder à StratX.'); return; } if (recoveryMode) { lockRecoveryInterface('La réinitialisation est obligatoire avant de pouvoir accéder à StratX.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; loadPremiumAccess(); } });

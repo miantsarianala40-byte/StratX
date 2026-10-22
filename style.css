@@ -297,3 +297,35 @@ button:disabled{cursor:not-allowed!important;opacity:.48;filter:saturate(.5)}
  .main-nav .nav-item{flex-direction:column;gap:3px}
  .main-nav .nav-label{font-size:9px}
 }
+
+/* StratX auth welcome screen + responsive collision safeguards */
+body.welcome-screen{background:#030405;overflow-x:hidden}
+body.welcome-screen .topbar,body.welcome-screen>.ambient{display:none!important}
+body.welcome-screen .shell{width:100%;max-width:none;padding:0;margin:0}
+.auth-layout.auth-welcome{min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:0;padding:clamp(24px,5vh,54px) 20px 28px;overflow:hidden;position:relative;background:radial-gradient(ellipse at 50% 54%,#30200d 0,transparent 34%),linear-gradient(180deg,#020303 0%,#07090d 64%,#020303 100%)}
+.auth-welcome .auth-story{width:min(620px,100%);padding:0;text-align:center;display:flex;flex-direction:column;align-items:center;position:relative;z-index:1}
+.auth-welcome .auth-story>.eyebrow,.auth-welcome .auth-story>h1,.auth-welcome .auth-story>p,.auth-welcome .auth-points,.auth-welcome .orbit-art{display:none!important}
+.auth-welcome .auth-story:before{content:'♛';display:grid;place-items:center;width:58px;height:44px;color:#ffcf35;font-size:40px;line-height:1;text-shadow:0 0 20px #e4a90055;margin-bottom:4px}
+.auth-welcome .auth-story:after{content:'StratX';display:block;font:italic 800 clamp(42px,8vw,66px)/1 'Space Grotesk',sans-serif;letter-spacing:-3px;color:#f8f8f8;text-shadow:0 3px 0 #555; margin-top:2px}
+.auth-sports-art{width:min(540px,100%);height:clamp(220px,37vh,360px);position:relative;isolation:isolate;margin:clamp(5px,2vh,20px) auto 8px;background:radial-gradient(ellipse at 50% 82%,#eaa91c66,transparent 42%),linear-gradient(180deg,transparent 0%,#11182088 66%,#09100b 100%);border-radius:18px;overflow:hidden}
+.auth-sports-art:before{content:'';position:absolute;inset:45% -20% -30%;background:repeating-linear-gradient(90deg,transparent 0 22px,#e5e7eb18 23px 25px),linear-gradient(0deg,#153b1d,#08100b 70%);transform:perspective(220px) rotateX(20deg);transform-origin:bottom}
+.auth-sports-art:after{content:'';position:absolute;left:10%;right:10%;bottom:20%;height:2px;background:linear-gradient(90deg,transparent,#ffc52c,transparent);box-shadow:0 0 22px #ffb900;z-index:1}
+.sports-ball{position:absolute;z-index:2;filter:drop-shadow(0 10px 8px #000b)}.ball-foot{font-size:clamp(90px,17vw,150px);left:22%;bottom:9%;transform:rotate(-15deg)}.ball-basket{font-size:clamp(65px,12vw,110px);left:48%;bottom:12%;transform:rotate(12deg)}.ball-tennis{font-size:clamp(42px,8vw,68px);left:67%;bottom:8%;transform:rotate(-10deg)}.sports-flight{position:absolute;right:13%;top:13%;font-size:clamp(38px,7vw,62px);color:#ff333b;transform:rotate(-20deg);filter:drop-shadow(0 0 10px #ff2525)}.sports-light{position:absolute;right:10%;top:28%;width:40%;height:2px;transform:rotate(-25deg);background:linear-gradient(90deg,transparent,#ff323a);box-shadow:0 0 14px #ff323a}
+.auth-welcome .auth-card{width:min(520px,100%);max-width:520px;justify-self:auto;margin:0 auto;padding:18px 0 0;background:transparent;border:0;box-shadow:none;border-radius:0;position:relative;z-index:2}
+.auth-welcome .auth-card-head,.auth-welcome #authIntro,.auth-welcome #authSteps,.auth-welcome #signupNameWrap,.auth-welcome #emailField,.auth-welcome #passwordField,.auth-welcome #confirmPasswordField,.auth-welcome #updatePassword,.auth-welcome #backAuthStep,.auth-welcome #backToLogin,.auth-welcome #resetPassword,.auth-welcome .secure-note{display:none!important}
+.auth-welcome .auth-actions{display:grid;gap:14px;margin:0}
+.auth-welcome .auth-actions .btn{min-height:58px;border-radius:999px;width:100%;font-size:16px;padding:15px 20px}
+.auth-welcome #login{background:linear-gradient(120deg,#ffe45b,#ffc928 55%,#f3b91d);border:1px solid #ffe56a;color:#191305;box-shadow:0 8px 30px #ffbf2030}
+.auth-welcome #signup{background:#050607;border:1px solid #c9a849;color:#f3f3f3}
+.auth-welcome #login span,.auth-welcome #signup span{display:none}
+.auth-welcome .message{margin-top:10px;text-align:center}
+body:not(.welcome-screen) .auth-layout{min-width:0}
+#app,.page,.surface,.auth-card,.premium-offer-card,.premium-feature-card,.dashboard-grid>*{min-width:0;max-width:100%}
+.page, .surface, .premium-admin-panel, .premium-request-form, .form-grid, .record-grid, .stat-grid, .dashboard-grid{overflow-wrap:anywhere}
+input,select,textarea,button{max-width:100%}
+input,select,textarea{min-width:0}
+.table-wrap,.table-responsive,.community-list,.notification-list,.premium-admin-requests{max-width:100%;min-width:0;overflow-x:auto}
+button{white-space:normal;overflow-wrap:anywhere}
+img,svg,video,canvas{max-width:100%;height:auto}
+@media(max-width:650px){.auth-layout:not(.auth-welcome){grid-template-columns:minmax(0,1fr);padding:20px 0 28px;gap:14px}.auth-layout:not(.auth-welcome) .auth-card{justify-self:stretch;margin:0;padding:20px}.auth-welcome .auth-story:after{font-size:48px}.auth-welcome .auth-sports-art{height:clamp(205px,32vh,280px);margin-top:6px}.auth-welcome .auth-card{padding-top:8px}.auth-welcome .auth-actions .btn{min-height:55px;font-size:15px}.main-nav .nav-item{min-width:0;max-width:none}.welcome-row,.section-heading,.surface-head,.form-end{min-width:0;flex-wrap:wrap}.premium-admin-actions{min-width:0}}
+@media(max-height:700px) and (max-width:650px){.auth-layout.auth-welcome{padding-top:18px}.auth-welcome .auth-sports-art{height:205px}.auth-welcome .auth-story:before{height:34px;font-size:31px}.auth-welcome .auth-story:after{font-size:42px}.auth-welcome .auth-actions .btn{min-height:49px}}
