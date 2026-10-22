@@ -258,14 +258,14 @@
         const { data, error } = await db.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: redirectUrl, data: { display_name: displayName } }
+          options: { emailRedirectTo: redirectUrl, data: { display_name: displayName, full_name: displayName, phone: ($('signupPhone')?.value || '').trim() || null } }
         });
         if (error) throw error;
         if (data.session) {
           state.user = data.user || data.session.user; authUI(); showPage('home'); await refresh();
           msg('authmsg', 'Compte créé et connecté. Bienvenue sur StratX.');
         } else {
-          msg('authmsg', 'Compte créé. Ouvrez l’e-mail de confirmation envoyé par Supabase, confirmez votre adresse, puis revenez ici pour vous connecter.');
+          msg('authmsg', 'Compte enregistré ! Ouvrez le message de confirmation envoyé par Supabase (vérifiez aussi les spams), cliquez sur le lien, puis revenez vous connecter. Si aucun e-mail n’arrive, vérifiez la configuration Email / SMTP de Supabase.');
         }
       } else if (action === 'updatePassword') {
         const { error } = await db.auth.updateUser({ password });
@@ -294,6 +294,8 @@
       if (signupStep === 1) {
         const name = $('signupName').value.trim(), email = $('email').value.trim();
         if (name.length < 2) { msg('authmsg', 'Saisissez un nom affiché valide.', true); $('signupName').focus(); return; }
+        const phone = $('signupPhone')?.value.trim() || '';
+        if (phone && !/^[+0-9() .-]{7,24}$/.test(phone)) { msg('authmsg', 'Vérifiez le numéro de téléphone ou laissez ce champ vide.', true); $('signupPhone').focus(); return; }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { msg('authmsg', 'Saisissez une adresse e-mail valide.', true); $('email').focus(); return; }
         setAuthFlow('signup', 2); msg('authmsg', 'Étape 2 : créez un mot de passe d’au moins 6 caractères.'); return;
       }
@@ -704,32 +706,8 @@
       const badge=$('notificationBadge');if(badge){badge.textContent=String(notices.length);badge.classList.toggle('hide',!notices.length);}
     } catch(error) { const p=document.createElement('p');p.className='message';p.textContent=`Impossible de charger les notifications : ${friendlyError(error)}. Vérifiez premium_access.sql.`;list.append(p); }
   }
-  async function loadVideoAd() {
-    const admin=isPremiumAdmin(); $('videoAdAdmin')?.classList.toggle('hide',!admin);
-    if(!db){return;}
-    try {
-      const {data,error}=await db.from('stratx_video_ads').select('title,description,video_url,click_url').eq('published',true).order('created_at',{ascending:false}).limit(1).maybeSingle();
-      if(error) throw error;
-      const video=$('stratxAdVideo');
-      if(!data){if(video){video.hidden=true;video.removeAttribute('src');video.load();} $('videoAdEmpty')?.classList.remove('hide');return;}
-      say('videoAdTitle',data.title||'Publicité StratX');say('videoAdDescription',data.description||'');
-      if(video){video.src=data.video_url;video.hidden=false;video.load();}
-      $('videoAdEmpty')?.classList.add('hide');
-      const link=$('videoAdLink');if(link){if(data.click_url){link.href=data.click_url;link.classList.remove('hide');}else link.classList.add('hide');}
-      if(admin){$('videoAdUrl').value=data.video_url||'';$('videoAdEditTitle').value=data.title||'';$('videoAdEditDescription').value=data.description||'';$('videoAdEditLink').value=data.click_url||'';}
-    }catch(error){say('videoAdMessage',`Vidéo publicitaire : ${friendlyError(error)}. Exécutez premium_access.sql mis à jour.`);}
-  }
-  $('saveVideoAd')?.addEventListener('click',async()=>{
-    if(!isPremiumAdmin()||!db||!state.user)return;
-    const url=$('videoAdUrl').value.trim(),title=$('videoAdEditTitle').value.trim(),description=$('videoAdEditDescription').value.trim(),click=$('videoAdEditLink').value.trim();
-    if(!/^https?:\/\//i.test(url)){say('videoAdMessage','Entrez une URL HTTPS/HTTP directe vers un fichier vidéo MP4 ou WebM.');return;}
-    const btn=$('saveVideoAd');btn.disabled=true;
-    try{const {error}=await db.from('stratx_video_ads').update({published:false,updated_at:new Date().toISOString()}).eq('published',true);if(error)throw error;const {error:insertError}=await db.from('stratx_video_ads').insert({title:title||'Publicité StratX',description,video_url:url,click_url:click||null,created_by:state.user.id,published:true});if(insertError)throw insertError;say('videoAdMessage','Vidéo publiée et visible dans l’espace publicitaire.');await loadVideoAd();}
-    catch(error){say('videoAdMessage',`Publication impossible : ${friendlyError(error)}`);}finally{btn.disabled=false;}
-  });
   $('notificationRefresh')?.addEventListener('click',loadNotifications);
   window.setInterval(()=>{if(state.user){loadNotifications();if(isPremiumAdmin())loadPremiumPaymentRequests();}},25000);
-  $('videoAdCard')?.addEventListener('click',()=>{if(state.user)loadVideoAd();});
 
   $('notificationAdminForm')?.addEventListener('submit',async e=>{e.preventDefault();if(!isPremiumAdmin()||!db||!state.user)return;const title=$('noticeTitle').value.trim(),body=$('noticeBody').value.trim();const button=e.submitter;if(button)button.disabled=true;try{const {error}=await db.from('stratx_announcements').insert({title,body,created_by:state.user.id,published:true});if(error)throw error;$('notificationAdminForm').reset();say('notificationMessage','Annonce publiée. Elle sera visible dans le centre de notifications des membres.');await loadNotifications();}catch(error){say('notificationMessage',`Publication impossible : ${friendlyError(error)}`);}finally{if(button)button.disabled=false;}});
 
@@ -815,7 +793,7 @@
     try {
       const { data, error } = await db.auth.getSession(); if(error) throw error; state.user=data.session?.user || null; authUI();
       if(state.user) { setStatus('Connecté'); await refresh(); await loadPremiumAccess(); syncRouteFromUrl(); } else { setStatus('En attente de connexion'); syncRouteFromUrl(); }
-      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide'); history.replaceState({}, '', '/mot-de-passe-oublie'); setAuthFlow('updatePassword'); msg('authmsg', 'Lien vérifié. Choisissez maintenant un nouveau mot de passe.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); loadVideoAd(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; loadPremiumAccess(); } });
+      db.auth.onAuthStateChange((event, session) => { state.user=session?.user || null; if(event === 'PASSWORD_RECOVERY') { $('auth')?.classList.remove('hide'); $('app')?.classList.add('hide'); $('logout')?.classList.add('hide'); history.replaceState({}, '', '/mot-de-passe-oublie'); setAuthFlow('updatePassword'); msg('authmsg', 'Lien vérifié. Choisissez maintenant un nouveau mot de passe.'); return; } if(!state.user && $('displayName')) delete $('displayName').dataset.loaded; authUI(); if(state.user) { setStatus('Connecté'); loadPremiumAccess(); if(event==='SIGNED_IN') { history.replaceState({}, '', '/accueil'); showPage('home', false); } if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='USER_UPDATED') setTimeout(() => refresh(),0); } else { setStatus('En attente de connexion'); state.posts=[]; state.games=[]; loadPremiumAccess(); } });
     } catch(error) { setStatus('Erreur de connexion',false); msg('authmsg',friendlyError(error),true); console.error('StratX auth init:',error); }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
